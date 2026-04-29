@@ -9,6 +9,7 @@ import io
 import csv
 import os
 import asyncio
+from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -98,6 +99,7 @@ auditor_or_regulator = RoleChecker(["auditor", "regulator"])
 # ---------------------------------------------------------------------------
 
 class PredictRequest(BaseModel):
+    # Basic fields (always required for backward compatibility)
     income: float
     loan_amount: float
     credit_history: str  # "excellent" | "good" | "fair" | "poor"
@@ -105,6 +107,24 @@ class PredictRequest(BaseModel):
     existing_loans: int
     duration: int
     age: int
+    
+    # Advanced underwriting fields (optional - for enhanced profiling)
+    monthly_expenses: Optional[float] = None
+    existing_emi: Optional[float] = None
+    savings_balance: Optional[float] = None
+    credit_utilization: Optional[float] = None
+    missed_payments_count: Optional[int] = None
+    education_level: Optional[str] = None
+    marital_status: Optional[str] = None
+    dependents: Optional[int] = None
+    residence_type: Optional[str] = None
+    city_tier: Optional[str] = None
+    loan_purpose: Optional[str] = None
+    collateral_available: Optional[bool] = None
+    requested_interest_preference: Optional[str] = None
+    
+    # Mode indicator
+    application_mode: Optional[str] = Field(default="basic", description="basic or advanced")
 
 class PredictResponse(BaseModel):
     approved: bool
@@ -164,7 +184,9 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
         - Audit log ID for traceability
     """
     try:
+        # === FEATURE ENGINEERING LAYER ===
         # Map PredictRequest fields to the 69-feature format trainer.py expects
+        # Base features (always present)
         input_dict = {
             "checking_status": "A11",
             "duration": req.duration,
@@ -197,6 +219,62 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
             "foreign_worker": "A202",
         }
 
+        # Enhanced features from advanced underwriting (if provided)
+        # These are stored as metadata for richer explanations
+        enhanced_features = {}
+        
+        # Financial features
+        if req.monthly_expenses is not None:
+            enhanced_features["monthly_expenses"] = req.monthly_expenses
+            # Derive debt-to-income insight
+            annual_debt = (req.existing_emi or 0) * 12 + (req.duration * (req.loan_amount / max(req.duration, 1)))
+            enhanced_features["dti_ratio"] = round(annual_debt / max(req.income, 1), 4)
+        
+        if req.existing_emi is not None:
+            enhanced_features["existing_emi"] = req.existing_emi
+        
+        if req.savings_balance is not None:
+            enhanced_features["savings_balance"] = req.savings_balance
+            # Months of expenses covered
+            if req.monthly_expenses and req.monthly_expenses > 0:
+                enhanced_features["emergency_fund_months"] = round(req.savings_balance / req.monthly_expenses, 1)
+        
+        if req.credit_utilization is not None:
+            enhanced_features["credit_utilization"] = req.credit_utilization
+        
+        if req.missed_payments_count is not None:
+            enhanced_features["missed_payments_count"] = req.missed_payments_count
+
+        # Personal features
+        if req.education_level:
+            enhanced_features["education_level"] = req.education_level
+        
+        if req.marital_status:
+            enhanced_features["marital_status"] = req.marital_status
+        
+        if req.dependents is not None:
+            enhanced_features["dependents"] = req.dependents
+        
+        if req.residence_type:
+            enhanced_features["residence_type"] = req.residence_type
+        
+        if req.city_tier:
+            enhanced_features["city_tier"] = req.city_tier
+
+        # Loan context features
+        if req.loan_purpose:
+            enhanced_features["loan_purpose"] = req.loan_purpose
+        
+        if req.collateral_available is not None:
+            enhanced_features["collateral_available"] = req.collateral_available
+        
+        if req.requested_interest_preference:
+            enhanced_features["interest_preference"] = req.requested_interest_preference
+
+        # Application mode
+        app_mode = req.application_mode or "basic"
+        enhanced_features["application_mode"] = app_mode
+
         # Single model load + single SHAP computation via trainer.predict()
         pred_result = trainer.predict(input_dict)
 
@@ -207,12 +285,29 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
             input_dict=input_dict,
         )
 
-        plain_lang  = shap_explainer.generate_plain_language(shap_results)
+        # Generate enriched explanations if advanced mode
+        plain_lang = shap_explainer.generate_plain_language(shap_results)
+        
+        # Add enhanced explanations for advanced mode
+        enriched_explanation = []
+        if app_mode == "advanced" and enhanced_features:
+            enriched_explanation = shap_explainer.generate_enriched_explanations(
+                shap_results, enhanced_features, req
+            )
+        
         suggestions = shap_explainer.actionable_suggestions(shap_results)
+        
+        # Add enhanced suggestions for advanced mode
+        if app_mode == "advanced" and enhanced_features:
+            enhanced_suggestions = shap_explainer.generate_enhanced_suggestions(
+                enhanced_features, req
+            )
+            suggestions.extend(enhanced_suggestions)
 
         # Append tamper-evident audit entry
         decision_data = {
             "input_data": input_dict,
+            "enhanced_features": enhanced_features,
             "prediction": pred_result["approved"],
             "confidence": pred_result["confidence"],
             "shap_values": shap_results,
@@ -223,8 +318,10 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
             "approved":    pred_result["approved"],
             "confidence":  pred_result["confidence"],
             "explanation": plain_lang,
+            "enriched_explanation": enriched_explanation if enriched_explanation else None,
             "suggestions": suggestions,
             "audit_id":    log_entry["id"],
+            "application_mode": app_mode,
         }
 
     except FileNotFoundError as exc:

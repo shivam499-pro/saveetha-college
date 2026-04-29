@@ -5,21 +5,38 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { predict } from '@/lib/api'
 import { PredictionRequest, PredictionResponse } from '@/types'
-import { CheckCircle2, XCircle, ArrowUpRight, ArrowDownRight, RefreshCcw, Lightbulb, Loader2, TrendingUp } from 'lucide-react'
+import { CheckCircle2, XCircle, ArrowUpRight, ArrowDownRight, RefreshCcw, Lightbulb, Loader2, TrendingUp, Shield, FileText, PiggyBank, Home, GraduationCap, Heart, Building, Landmark, Percent } from 'lucide-react'
 import Layout from '@/components/Layout'
 
-const formSchema = z.object({
-  income: z.number().min(0),
-  loan_amount: z.number().min(0),
-  credit_history: z.string(),
-  employment_type: z.string(),
-  existing_loans: z.number().min(0),
-  duration: z.number().min(1),
-  age: z.number().min(18),
+const formSchemaBasic = z.object({
+  income: z.number().min(0, 'Income must be positive'),
+  loan_amount: z.number().min(0, 'Loan amount must be positive'),
+  credit_history: z.string().min(1, 'Credit history is required'),
+  employment_type: z.string().min(1, 'Employment type is required'),
+  existing_loans: z.number().min(0, 'Existing loans must be non-negative'),
+  duration: z.number().min(1, 'Duration must be at least 1 month'),
+  age: z.number().min(18, 'Applicant must be at least 18 years old'),
+  application_mode: z.enum(['basic', 'advanced']).default('basic'),
+})
+
+const formSchemaAdvanced = formSchemaBasic.extend({
+  monthly_expenses: z.number().min(0, 'Monthly expenses must be non-negative').optional(),
+  existing_emi: z.number().min(0, 'Existing EMI must be non-negative').optional(),
+  savings_balance: z.number().min(0, 'Savings balance must be non-negative').optional(),
+  credit_utilization: z.number().min(0).max(100, 'Credit utilization must be between 0 and 100').optional(),
+  missed_payments_count: z.number().min(0, 'Missed payments must be non-negative').optional(),
+  education_level: z.string().optional(),
+  marital_status: z.string().optional(),
+  dependents: z.number().min(0, 'Dependents must be non-negative').optional(),
+  residence_type: z.string().optional(),
+  city_tier: z.string().optional(),
+  loan_purpose: z.string().optional(),
+  collateral_available: z.boolean().optional(),
+  requested_interest_preference: z.string().optional(),
 })
 
 const S = {
-  page: { maxWidth: '900px', margin: '0 auto' } as React.CSSProperties,
+  page: { maxWidth: '1000px', margin: '0 auto' } as React.CSSProperties,
   card: {
     background: 'white',
     borderRadius: '20px',
@@ -53,7 +70,7 @@ const S = {
     gridTemplateColumns: '1fr 1fr',
     gap: '20px',
   } as React.CSSProperties,
-  fieldGroup: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
+  fieldGroup: { display: 'flex', flexDirection: 'column' as const, gap: '8px' } as React.CSSProperties,
   label: {
     fontSize: '13px',
     fontWeight: '600',
@@ -86,6 +103,12 @@ const S = {
     cursor: 'pointer',
     fontFamily: 'Inter, sans-serif',
   } as React.CSSProperties,
+  checkbox: {
+    width: '18px',
+    height: '18px',
+    accentColor: '#F4B942',
+    cursor: 'pointer',
+  } as React.CSSProperties,
   submitBtn: {
     width: '100%',
     height: '52px',
@@ -104,6 +127,51 @@ const S = {
     transition: 'all 0.2s',
     fontFamily: 'Plus Jakarta Sans, sans-serif',
   } as React.CSSProperties,
+  modeToggle: {
+    display: 'flex',
+    gap: '8px',
+    background: '#F8FAFC',
+    padding: '4px',
+    borderRadius: '12px',
+    width: 'fit-content',
+  } as React.CSSProperties,
+  modeButton: (active: boolean) => ({
+    padding: '10px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    background: active ? '#0A1628' : 'transparent',
+    color: active ? '#F4B942' : '#64748B',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'all 0.2s',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+  } as React.CSSProperties),
+  section: {
+    background: '#F8FAFC',
+    borderRadius: '12px',
+    padding: '20px',
+    marginBottom: '16px',
+    border: '1px solid #E2E8F0',
+  } as React.CSSProperties,
+  sectionTitle: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#0A1628',
+    margin: '0 0 16px 0',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+  } as React.CSSProperties,
+  errorText: {
+    fontSize: '12px',
+    color: '#DC2626',
+    marginTop: '4px',
+  } as React.CSSProperties,
 }
 
 const ApplicantView: React.FC = () => {
@@ -111,9 +179,17 @@ const ApplicantView: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PredictionResponse | null>(null)
   const [showAll, setShowAll] = useState(false)
+  const [mode, setMode] = useState<'basic' | 'advanced'>('basic')
 
-  const { register, handleSubmit, setValue, watch, reset } = useForm<PredictionRequest>({
-    resolver: zodResolver(formSchema),
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<PredictionRequest>({
+    resolver: zodResolver(mode === 'basic' ? formSchemaBasic : formSchemaAdvanced),
     defaultValues: {
       income: 50000,
       loan_amount: 10000,
@@ -122,7 +198,21 @@ const ApplicantView: React.FC = () => {
       existing_loans: 0,
       duration: 24,
       age: 30,
-    }
+      application_mode: 'basic',
+      monthly_expenses: 2000,
+      existing_emi: 0,
+      savings_balance: 10000,
+      credit_utilization: 30,
+      missed_payments_count: 0,
+      education_level: 'bachelors',
+      marital_status: 'single',
+      dependents: 0,
+      residence_type: 'owned',
+      city_tier: 'tier1',
+      loan_purpose: 'personal',
+      collateral_available: false,
+      requested_interest_preference: 'standard',
+    },
   })
 
   const onSubmit = async (data: PredictionRequest) => {
@@ -140,6 +230,179 @@ const ApplicantView: React.FC = () => {
   const handleReset = () => { setResult(null); setShowAll(false); reset() }
   const visible = showAll ? result?.explanation : result?.explanation?.slice(0, 8)
 
+  const handleModeSwitch = (newMode: 'basic' | 'advanced') => {
+    setMode(newMode)
+    setValue('application_mode', newMode)
+  }
+
+  const renderBasicFields = () => (
+    <>
+      {/* Income */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Annual Income ($)</label>
+        <input type="number" style={S.input} {...register('income', { valueAsNumber: true })} />
+        {errors.income && <span style={S.errorText}>{errors.income.message}</span>}
+      </div>
+      {/* Loan Amount */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Loan Amount ($)</label>
+        <input type="number" style={S.input} {...register('loan_amount', { valueAsNumber: true })} />
+        {errors.loan_amount && <span style={S.errorText}>{errors.loan_amount.message}</span>}
+      </div>
+      {/* Credit History */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Credit History</label>
+        <select style={S.select} value={watch('credit_history')} onChange={e => setValue('credit_history', e.target.value)}>
+          <option value="excellent">Excellent</option>
+          <option value="good">Good</option>
+          <option value="fair">Fair</option>
+          <option value="poor">Poor</option>
+        </select>
+      </div>
+      {/* Employment */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Employment Type</label>
+        <select style={S.select} value={watch('employment_type')} onChange={e => setValue('employment_type', e.target.value)}>
+          <option value="salaried">Salaried</option>
+          <option value="self_employed">Self Employed</option>
+          <option value="unemployed">Unemployed</option>
+        </select>
+      </div>
+      {/* Existing Loans */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Existing Loans</label>
+        <input type="number" style={S.input} {...register('existing_loans', { valueAsNumber: true })} />
+        {errors.existing_loans && <span style={S.errorText}>{errors.existing_loans.message}</span>}
+      </div>
+      {/* Duration */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Duration (months)</label>
+        <input type="number" style={S.input} {...register('duration', { valueAsNumber: true })} />
+        {errors.duration && <span style={S.errorText}>{errors.duration.message}</span>}
+      </div>
+      {/* Age */}
+      <div style={S.fieldGroup}>
+        <label style={S.label}>Age</label>
+        <input type="number" style={S.input} {...register('age', { valueAsNumber: true })} />
+        {errors.age && <span style={S.errorText}>{errors.age.message}</span>}
+      </div>
+    </>
+  )
+
+  const renderAdvancedFields = () => (
+    <>
+      {/* Financial Section */}
+      <div style={S.section}>
+        <h4 style={S.sectionTitle}><PiggyBank size={18} /> Financial Details</h4>
+        <div style={{ ...S.grid, gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Monthly Expenses ($)</label>
+            <input type="number" style={S.input} {...register('monthly_expenses', { valueAsNumber: true })} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Existing EMI ($)</label>
+            <input type="number" style={S.input} {...register('existing_emi', { valueAsNumber: true })} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Savings Balance ($)</label>
+            <input type="number" style={S.input} {...register('savings_balance', { valueAsNumber: true })} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Credit Utilization (%)</label>
+            <input type="number" style={S.input} {...register('credit_utilization', { valueAsNumber: true })} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Missed Payments Count</label>
+            <input type="number" style={S.input} {...register('missed_payments_count', { valueAsNumber: true })} />
+          </div>
+        </div>
+      </div>
+
+      {/* Personal Section */}
+      <div style={S.section}>
+        <h4 style={S.sectionTitle}><Heart size={18} /> Personal Information</h4>
+        <div style={{ ...S.grid, gridTemplateColumns: '1fr 1fr 1fr' }}>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Education Level</label>
+            <select style={S.select} value={watch('education_level')} onChange={e => setValue('education_level', e.target.value)}>
+              <option value="">Select...</option>
+              <option value="high_school">High School</option>
+              <option value="bachelors">Bachelor's</option>
+              <option value="masters">Master's</option>
+              <option value="phd">PhD</option>
+            </select>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Marital Status</label>
+            <select style={S.select} value={watch('marital_status')} onChange={e => setValue('marital_status', e.target.value)}>
+              <option value="">Select...</option>
+              <option value="single">Single</option>
+              <option value="married">Married</option>
+              <option value="divorced">Divorced</option>
+            </select>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Dependents</label>
+            <input type="number" style={S.input} {...register('dependents', { valueAsNumber: true })} />
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Residence Type</label>
+            <select style={S.select} value={watch('residence_type')} onChange={e => setValue('residence_type', e.target.value)}>
+              <option value="">Select...</option>
+              <option value="owned">Owned</option>
+              <option value="rented">Rented</option>
+              <option value="mortgaged">Mortgaged</option>
+            </select>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>City Tier</label>
+            <select style={S.select} value={watch('city_tier')} onChange={e => setValue('city_tier', e.target.value)}>
+              <option value="">Select...</option>
+              <option value="tier1">Tier 1 (Metro)</option>
+              <option value="tier2">Tier 2</option>
+              <option value="tier3">Tier 3</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Loan Context Section */}
+      <div style={S.section}>
+        <h4 style={S.sectionTitle}><Landmark size={18} /> Loan Context</h4>
+        <div style={{ ...S.grid, gridTemplateColumns: '1fr 1fr' }}>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Loan Purpose</label>
+            <select style={S.select} value={watch('loan_purpose')} onChange={e => setValue('loan_purpose', e.target.value)}>
+              <option value="">Select...</option>
+              <option value="personal">Personal</option>
+              <option value="home">Home</option>
+              <option value="auto">Auto</option>
+              <option value="education">Education</option>
+              <option value="business">Business</option>
+              <option value="debt_consolidation">Debt Consolidation</option>
+            </select>
+          </div>
+          <div style={S.fieldGroup}>
+            <label style={S.label}>Interest Rate Preference</label>
+            <select style={S.select} value={watch('requested_interest_preference')} onChange={e => setValue('requested_interest_preference', e.target.value)}>
+              <option value="">Select...</option>
+              <option value="fixed">Fixed Rate</option>
+              <option value="variable">Variable Rate</option>
+              <option value="standard">Standard Rate</option>
+            </select>
+          </div>
+          <div style={{ ...S.fieldGroup, gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input type="checkbox" style={S.checkbox} {...register('collateral_available')} />
+            <label style={{ ...S.label, margin: 0, cursor: 'pointer' }}>
+              <Shield size={16} style={{ marginRight: '6px' }} />
+              Collateral Available
+            </label>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+
   return (
     <Layout>
       <div style={S.page}>
@@ -148,55 +411,40 @@ const ApplicantView: React.FC = () => {
             <div style={S.cardHeader}>
               <div style={S.accentBar} />
               <h2 style={S.cardTitle}>{t('applicant.form.title')}</h2>
+              <div style={{ marginLeft: 'auto' }}>
+                <div style={S.modeToggle}>
+                  <button
+                    style={S.modeButton(mode === 'basic')}
+                    onClick={() => handleModeSwitch('basic')}
+                  >
+                    <FileText size={16} />
+                    Basic Check
+                  </button>
+                  <button
+                    style={S.modeButton(mode === 'advanced')}
+                    onClick={() => handleModeSwitch('advanced')}
+                  >
+                    <Shield size={16} />
+                    Advanced Underwriting
+                  </button>
+                </div>
+              </div>
             </div>
             <div style={S.cardBody}>
               <form onSubmit={handleSubmit(onSubmit)}>
-                <div style={S.grid}>
-                  {/* Income */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.income')}</label>
-                    <input type="number" style={S.input} {...register('income', { valueAsNumber: true })} />
+                {mode === 'basic' && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={S.grid}>
+                      {renderBasicFields()}
+                    </div>
                   </div>
-                  {/* Loan Amount */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.loanAmount')}</label>
-                    <input type="number" style={S.input} {...register('loan_amount', { valueAsNumber: true })} />
+                )}
+                {mode === 'advanced' && (
+                  <div style={{ marginBottom: '20px' }}>
+                    {renderBasicFields()}
+                    {renderAdvancedFields()}
                   </div>
-                  {/* Credit History */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.creditHistory')}</label>
-                    <select style={S.select} value={watch('credit_history')} onChange={e => setValue('credit_history', e.target.value)}>
-                      <option value="excellent">Excellent</option>
-                      <option value="good">Good</option>
-                      <option value="fair">Fair</option>
-                      <option value="poor">Poor</option>
-                    </select>
-                  </div>
-                  {/* Employment */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.employmentType')}</label>
-                    <select style={S.select} value={watch('employment_type')} onChange={e => setValue('employment_type', e.target.value)}>
-                      <option value="salaried">Salaried</option>
-                      <option value="self_employed">Self Employed</option>
-                      <option value="unemployed">Unemployed</option>
-                    </select>
-                  </div>
-                  {/* Existing Loans */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.existingLoans')}</label>
-                    <input type="number" style={S.input} {...register('existing_loans', { valueAsNumber: true })} />
-                  </div>
-                  {/* Duration */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.duration')}</label>
-                    <input type="number" style={S.input} {...register('duration', { valueAsNumber: true })} />
-                  </div>
-                  {/* Age */}
-                  <div style={S.fieldGroup}>
-                    <label style={S.label}>{t('applicant.form.age')}</label>
-                    <input type="number" style={S.input} {...register('age', { valueAsNumber: true })} />
-                  </div>
-                </div>
+                )}
                 {/* Submit */}
                 <div style={{ gridColumn: '1 / -1', marginTop: '24px' }}>
                   <button type="submit" disabled={loading} style={S.submitBtn}>
@@ -260,6 +508,16 @@ const ApplicantView: React.FC = () => {
                       Model Confidence: {(result.confidence * 100).toFixed(0)}%
                     </span>
                   </div>
+                  {result.application_mode && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      marginLeft: '12px', fontSize: '12px', color: '#6B7280',
+                      fontWeight: '500',
+                    }}>
+                      <Shield size={14} />
+                      {result.application_mode === 'advanced' ? 'Advanced Underwriting' : 'Basic Check'}
+                    </span>
+                  )}
                 </div>
               </div>
               <button

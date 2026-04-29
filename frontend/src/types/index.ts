@@ -1,4 +1,5 @@
 export interface PredictionRequest {
+  // Basic fields (always required)
   income: number
   loan_amount: number
   credit_history: string
@@ -6,6 +7,24 @@ export interface PredictionRequest {
   existing_loans: number
   duration: number
   age: number
+  
+  // Advanced underwriting fields (optional - for advanced mode)
+  monthly_expenses?: number
+  existing_emi?: number
+  savings_balance?: number
+  credit_utilization?: number
+  missed_payments_count?: number
+  education_level?: string
+  marital_status?: string
+  dependents?: number
+  residence_type?: string
+  city_tier?: string
+  loan_purpose?: string
+  collateral_available?: boolean
+  requested_interest_preference?: string
+  
+  // Mode indicator
+  application_mode?: 'basic' | 'advanced'
 }
 
 export interface ExplanationFactor {
@@ -21,6 +40,8 @@ export interface PredictionResponse {
   explanation: string[]
   suggestions: string[]
   audit_id: string
+  application_mode?: 'basic' | 'advanced'
+  enriched_explanation?: string[]
 }
 
 export interface AuditEntry {
