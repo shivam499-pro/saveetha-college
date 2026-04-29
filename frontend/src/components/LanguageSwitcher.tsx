@@ -1,34 +1,33 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SupportedLocale } from '../types'
+import { cn } from "@/lib/utils"
 
 const LanguageSwitcher: React.FC = () => {
   const { i18n } = useTranslation()
 
   const languages = [
-    { code: 'en' as SupportedLocale, label: 'EN' },
-    { code: 'ta' as SupportedLocale, label: 'தமிழ்' },
-    { code: 'hi' as SupportedLocale, label: 'हिंदी' },
+    { code: 'en', label: 'EN' },
+    { code: 'ta', label: 'தமிழ்' },
+    { code: 'hi', label: 'हिंदी' },
   ]
 
-  const handleLanguageChange = (lng: SupportedLocale): void => {
-    i18n.changeLanguage(lng)
+  const changeLanguage = (code: string) => {
+    i18n.changeLanguage(code)
+    localStorage.setItem('xai_lang', code)
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex gap-4">
       {languages.map((lang) => (
         <button
           key={lang.code}
-          onClick={() => handleLanguageChange(lang.code)}
-          className={`
-            px-3 py-1.5 rounded-md text-sm font-medium transition-all
-            ${i18n.language === lang.code
-              ? 'bg-gold-500 text-white font-bold border-b-2 border-gold-400'
-              : 'bg-navy-800 text-gray-300 hover:bg-navy-700 hover:text-white'
-            }
-          `}
-          aria-label={`Switch to ${lang.label} language`}
+          onClick={() => changeLanguage(lang.code)}
+          className={cn(
+            "text-sm transition-all hover:text-[#F4B942]",
+            i18n.language === lang.code 
+              ? "font-bold text-[#F4B942] underline decoration-2 underline-offset-4" 
+              : "text-white/70"
+          )}
         >
           {lang.label}
         </button>

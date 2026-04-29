@@ -1,29 +1,40 @@
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-import os
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://xai_user:xai_password@postgres:5432/xai_lending"
+from dotenv import load_dotenv
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+print("Using DB:", DATABASE_URL)
+
+# Engine
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    pool_pre_ping=True,
+    connect_args={
+        "statement_cache_size": 0
+    }
 )
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+# Session
 AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
 )
 
+# Base (🔥 THIS WAS MISSING)
 Base = declarative_base()
 
 # Dependency
 async def get_db():
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session
 
-
-async def init_db() -> None:
-    """Initialize database tables."""
+# Init DB
+async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

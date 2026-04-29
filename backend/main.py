@@ -9,6 +9,8 @@ import io
 import csv
 import os
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +23,13 @@ from src.explainability import shap_explainer
 from src.fairness import fairness_evaluator
 from src.audit import audit_logger
 from src.utils.auth import RoleChecker, create_access_token
-from src.db.database import init_db
+from src.db.database import init_db, AsyncSessionLocal
+from src.db.models import User
+from passlib.context import CryptContext
+from sqlalchemy import select
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ---------------------------------------------------------------------------
 # App + CORS
@@ -38,7 +46,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://frontend:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,7 +115,8 @@ class PredictResponse(BaseModel):
 
 
 class TokenRequest(BaseModel):
-    role: str = Field(..., description="applicant | auditor | regulator")
+    username: str = Field(..., description="username (e.g. applicant, auditor, regulator)")
+    password: str = Field(..., description="password (e.g. pass123)")
 
 
 # ---------------------------------------------------------------------------
@@ -115,13 +124,25 @@ class TokenRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/api/v1/auth/token", tags=["Auth"])
-def get_test_token(req: TokenRequest):
-    """Generate a signed JWT for the requested role (for testing/demo purposes)."""
-    allowed = {"applicant", "auditor", "regulator"}
-    if req.role not in allowed:
-        raise HTTPException(status_code=400, detail=f"Role must be one of: {allowed}")
-    token = create_access_token({"role": req.role})
-    return {"access_token": token, "token_type": "bearer"}
+async def login(req: TokenRequest):
+    """
+    Authenticate user and generate a signed JWT.
+    Standard roles: applicant, auditor, regulator. Default password: pass123
+    """
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.username == req.username))
+        user = result.scalar_one_or_none()
+
+        if not user or not pwd_context.verify(req.password, user.password_hash):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # In this system, the username corresponds to the role
+        token = create_access_token({"role": user.username})
+        return {"access_token": token, "token_type": "bearer"}
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +155,7 @@ def health():
 
 
 @app.post("/api/v1/predict", response_model=PredictResponse, tags=["Predict"])
-def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_auditor)):
+async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_auditor)):
     """
     Run XGBoost inference on a loan application and return:
         - Approval decision + confidence
@@ -196,7 +217,7 @@ def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_auditor))
             "confidence": pred_result["confidence"],
             "shap_values": shap_results,
         }
-        log_entry = audit_logger.log_decision(decision_data)
+        log_entry = await audit_logger.log_decision(decision_data)
 
         return {
             "approved":    pred_result["approved"],
@@ -217,13 +238,13 @@ def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_auditor))
 # ---------------------------------------------------------------------------
 
 @app.get("/api/v1/audit/log", tags=["Audit"])
-def get_audit_log(
+async def get_audit_log(
     page:  int = Query(1,  ge=1,  description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Entries per page"),
     role: str = Depends(auditor_only),
 ):
     """Return paginated audit log entries (newest first). Auditor role required."""
-    logs = audit_logger.get_log(page, limit)
+    logs = await audit_logger.get_log(page, limit)
     return {"page": page, "limit": limit, "count": len(logs), "data": logs}
 
 
@@ -232,9 +253,9 @@ def get_audit_log(
 # ---------------------------------------------------------------------------
 
 @app.get("/api/v1/audit/verify", tags=["Audit"])
-def verify_audit_chain(role: str = Depends(auditor_only)):
+async def verify_audit_chain(role: str = Depends(auditor_only)):
     """Verify the SHA-256 hash chain integrity of the audit log. Auditor role required."""
-    return audit_logger.verify_chain()
+    return await audit_logger.verify_chain()
 
 
 # ---------------------------------------------------------------------------
@@ -259,63 +280,49 @@ def get_fairness_metrics(role: str = Depends(regulator_only)):
 
 @app.get("/api/v1/fairness/drift", tags=["Fairness"])
 def get_data_drift(role: str = Depends(regulator_only)):
-    """
-    Return Evidently data drift report (reference = test split, current = audit log inputs).
-    Regulator role required.
-    """
     report = fairness_evaluator.get_drift_report()
     if "error" in report:
         raise HTTPException(status_code=400, detail=report["error"])
     return report
-
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/dashboard/stats
 # ---------------------------------------------------------------------------
 
 @app.get("/api/v1/dashboard/stats", tags=["Dashboard"])
-def get_dashboard_stats(role: str = Depends(auditor_or_regulator)):
-    """Aggregate statistics over all audit log entries. Auditor or Regulator role required."""
-    logs = audit_logger._read_all_logs()
-    total    = len(logs)
+async def get_dashboard_stats(role: str = Depends(auditor_or_regulator)):
+    logs = await audit_logger.get_log(1, 10000)
+    total = len(logs)
     approved = sum(1 for log in logs if log.get("prediction") is True)
     rejected = total - approved
     approval_rate = round((approved / total * 100), 2) if total > 0 else 0.0
-    anomalies = audit_logger.flag_anomalies()
-
+    anomalies = await audit_logger.flag_anomalies()
     return {
-        "total":          total,
-        "approved":       approved,
-        "rejected":       rejected,
-        "approval_rate":  approval_rate,
-        "anomaly_count":  len(anomalies),
+        "total": total,
+        "approved": approved,
+        "rejected": rejected,
+        "approval_rate": approval_rate,
+        "anomaly_count": len(anomalies),
     }
-
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/report/export
 # ---------------------------------------------------------------------------
-
 @app.get("/api/v1/report/export", tags=["Report"])
-def export_report(
+async def export_report(
     format: str = Query(..., pattern="^(pdf|csv)$", description="pdf or csv"),
     role: str = Depends(regulator_only),
 ):
-    """
-    Download a compliance report as PDF or CSV.
-    Regulator role required.
-    """
-    # Gather data (bypass HTTP layer — call module functions directly)
     metrics = fairness_evaluator.get_fairness_report()
     drift   = fairness_evaluator.get_drift_report()
 
-    all_logs  = audit_logger._read_all_logs()
-    total     = len(all_logs)
-    approved  = sum(1 for log in all_logs if log.get("prediction") is True)
-    rejected  = total - approved
+    all_logs      = await audit_logger.get_log(1, 10000)
+    total         = len(all_logs)
+    approved      = sum(1 for log in all_logs if log.get("prediction") is True)
+    rejected      = total - approved
     approval_rate = round((approved / total * 100), 2) if total > 0 else 0.0
-    anomaly_count = len(audit_logger.flag_anomalies())
-
+    anomaly_count = len(await audit_logger.flag_anomalies())
+    
     # ---- CSV ---------------------------------------------------------------
     if format == "csv":
         output = io.StringIO()

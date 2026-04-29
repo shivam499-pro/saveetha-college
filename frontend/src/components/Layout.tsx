@@ -1,113 +1,96 @@
 import React from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Link, Outlet, useLocation } from 'react-router-dom'
-import LanguageSwitcher from './LanguageSwitcher'
-import { useAuth } from '../lib/auth'
+import { LayoutDashboard, FileText, ShieldAlert, Scale, Download, LogOut, Menu } from 'lucide-react'
+import { cn } from "@/lib/utils"
+import { getRole, logout } from "@/lib/auth"
+import LanguageSwitcher from "@/components/LanguageSwitcher"
 
-const Layout: React.FC = () => {
+interface NavItem {
+  label: string
+  href: string
+  icon: React.ElementType
+}
+
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const location = useLocation()
-  const { role, isAuthenticated, logout } = useAuth()
+  const role = getRole()
 
-  const isLoginPage = location.pathname === '/login'
-
-  const navItems = [
-    { key: 'dashboard', label: t('nav.dashboard'), path: `/${role}` },
-    { key: 'predict', label: t('nav.predict'), path: `/${role}/predict` },
-    { key: 'auditLog', label: t('nav.auditLog'), path: `/${role}/audit` },
-    { key: 'fairness', label: t('nav.fairness'), path: `/${role}/fairness` },
-    { key: 'export', label: t('nav.export'), path: `/${role}/export` },
-  ]
-
-  const getNavItemsForRole = () => {
-    if (role === 'applicant') {
-      return navItems.filter(item => item.key === 'predict')
-    }
-    if (role === 'auditor') {
-      return navItems.filter(item =>
-        item.key === 'dashboard' ||
-        item.key === 'auditLog' ||
-        item.key === 'fairness'
-      )
-    }
-    if (role === 'regulator') {
-      return navItems.filter(item =>
-        item.key === 'dashboard' ||
-        item.key === 'fairness' ||
-        item.key === 'export'
-      )
-    }
-    return []
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
   }
 
-  const filteredNavItems = isAuthenticated ? getNavItemsForRole() : []
-
-  if (isLoginPage) {
-    return <Outlet />
+  const navItems: Record<string, NavItem[]> = {
+    applicant: [
+      { label: t('nav.predict'), href: '/applicant', icon: FileText },
+    ],
+    auditor: [
+      { label: t('nav.dashboard'), href: '/auditor', icon: LayoutDashboard },
+      { label: t('nav.auditLog'), href: '/auditor/logs', icon: FileText },
+      { label: t('nav.anomalies'), href: '/auditor/anomalies', icon: ShieldAlert },
+    ],
+    regulator: [
+      { label: t('nav.fairness'), href: '/regulator', icon: Scale },
+      { label: t('nav.export'), href: '/regulator/export', icon: Download },
+    ],
   }
+
+  const currentNavItems = role ? navItems[role] || [] : []
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen bg-[#FFFFFF]">
       {/* Sidebar */}
-      <aside className="w-64 bg-navy-900 text-white flex flex-col">
-        <div className="p-6 border-b border-navy-700">
-          <h1 className="text-xl font-bold text-gold-400">
-            {t('layout.title')}
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {t('layout.subtitle')}
-          </p>
+      <aside className="w-[260px] bg-[#0A1628] text-white flex flex-col">
+        <div className="p-6">
+          <h1 className="text-xl font-bold text-[#F4B942]">XAI Lending</h1>
+          <p className="text-xs text-white/50 uppercase mt-1 tracking-wider">{role}</p>
         </div>
-        
-        <nav className="flex-1 py-4">
-          {filteredNavItems.map((item) => (
+
+        <nav className="flex-1 px-4 space-y-1">
+          {currentNavItems.map((item) => (
             <Link
-              key={item.key}
-              to={item.path}
-              className={`
-                flex items-center px-6 py-3 text-sm font-medium
-                transition-colors duration-150
-                ${location.pathname === item.path
-                  ? 'bg-navy-700 text-gold-400 border-l-4 border-gold-400'
-                  : 'text-gray-300 hover:bg-navy-800 hover:text-white'
-                }
-              `}
+              key={item.href}
+              to={item.href}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-md transition-colors text-sm",
+                location.pathname === item.href
+                  ? "bg-[#F4B942] text-[#0A1628] font-semibold"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
+              )}
             >
-              <span className="ml-3">{item.label}</span>
+              <item.icon size={18} />
+              {item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-navy-700">
+        <div className="p-4 border-t border-white/10">
           <button
-            onClick={logout}
-            className="w-full px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full text-sm text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
           >
-            {t('layout.logout')}
+            <LogOut size={18} />
+            {t('nav.logout')}
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col">
-        {/* Top navbar */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-navy-900">
-              {t(`nav.${location.pathname.split('/').pop() || 'dashboard'}`)}
-            </h2>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 border-b flex items-center justify-between px-8 bg-white">
+          <div className="font-semibold text-[#0A1628]">
+            {currentNavItems.find(i => i.href === location.pathname)?.label || t('nav.dashboard')}
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">
-              {role && t(`role.${role}`)}
-            </span>
+          <div className="bg-[#0A1628] px-4 py-2 rounded-full">
             <LanguageSwitcher />
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-6 overflow-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto p-8">
+          {children}
         </main>
       </div>
     </div>

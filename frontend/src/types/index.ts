@@ -1,135 +1,79 @@
-// Supported locales
-export type SupportedLocale = 'en' | 'ta' | 'hi'
-
-// JWT Payload
-export interface JWTPayload {
-  sub: string
-  role: 'applicant' | 'auditor' | 'regulator'
-  exp: number
-  iat: number
-  [key: string]: any
-}
-
-// Prediction request and response
 export interface PredictionRequest {
-  annual_income: number
+  income: number
   loan_amount: number
-  credit_history: number
-  employment_type: 'salaried' | 'self_employed' | 'unemployed' | 'student'
+  credit_history: string
+  employment_type: string
   existing_loans: number
-}
-
-export interface PredictionResponse {
-  prediction: 'approved' | 'rejected'
-  confidence: number
-  explanation_factors: ExplanationFactor[]
-  suggestions: Suggestion[]
-  timestamp: string
-  request_id: string
+  duration: number
+  age: number
 }
 
 export interface ExplanationFactor {
   feature: string
-  value: number | string
-  impact: 'positive' | 'negative' | 'neutral'
-  description: string
+  shap_score: number
+  direction: 'positive' | 'negative'
+  value: number
 }
 
-export interface Suggestion {
-  type: 'improvement' | 'warning' | 'info'
-  message: string
-  priority: 'high' | 'medium' | 'low'
+export interface PredictionResponse {
+  approved: boolean
+  confidence: number
+  explanation: string[]
+  suggestions: string[]
+  audit_id: string
 }
 
-// Audit and chain verification
 export interface AuditEntry {
   id: string
   timestamp: string
-  action: string
-  user_id: string
-  role: 'applicant' | 'auditor' | 'regulator'
-  request_id: string
-  prediction: 'approved' | 'rejected'
-  details: Record<string, any>
-  previous_hash: string
+  input_data: Record<string, unknown>
+  prediction: boolean
+  confidence: number
+  shap_values: ExplanationFactor[]
+  prev_hash: string
   current_hash: string
 }
 
 export interface AuditLogResponse {
-  entries: AuditEntry[]
-  total: number
   page: number
-  page_size: number
+  limit: number
+  count: number
+  data: AuditEntry[]
 }
 
 export interface ChainVerifyResponse {
-  is_valid: boolean
-  broken_at: number | null
-  total_entries: number
-  verification_details: {
-    index: number
-    previous_hash: string
-    current_hash: string
-    computed_hash: string
-    is_valid: boolean
-  }[]
+  valid: boolean
+  broken_at: string | null
 }
 
-// Fairness and drift
 export interface FairnessMetrics {
-  demographic_parity: {
-    value: number
-    threshold: number
-    passes: boolean
+  [attribute: string]: {
+    demographic_parity_difference: number
+    equalized_odds_difference: number
+    selection_rates: Record<string, number>
+    four_fifths_pass: boolean
   }
-  equalized_odds: {
-    value: number
-    threshold: number
-    passes: boolean
-  }
-  equal_opportunity: {
-    value: number
-    threshold: number
-    passes: boolean
-  }
-  four_fifths_rule: {
-    value: number
-    threshold: number
-    passes: boolean
-  }
-  group_disparity: Record<string, number>
-  timestamp: string
 }
 
 export interface DriftReport {
-  feature_drift: Record<string, {
+  [feature: string]: {
     drift_score: number
-    status: 'stable' | 'warning' | 'critical'
-    baseline_mean: number
-    current_mean: number
-    change_percentage: number
-  }>
-  prediction_drift: {
-    drift_score: number
-    status: 'stable' | 'warning' | 'critical'
-    baseline_approval_rate: number
-    current_approval_rate: number
-  }  
-  timestamp: string
+    drift_detected: boolean
+  }
 }
 
-// Dashboard stats
 export interface DashboardStats {
-  total_applications: number
+  total: number
   approved: number
   rejected: number
-  anomalies_detected: number
   approval_rate: number
-  avg_confidence: number
-  recent_predictions: Array<{
-    id: string
-    timestamp: string
-    prediction: 'approved' | 'rejected'
-    confidence: number
-  }>
+  anomaly_count: number
+}
+
+export type SupportedLocale = 'en' | 'ta' | 'hi'
+export type UserRole = 'applicant' | 'auditor' | 'regulator'
+
+export interface JWTPayload {
+  role: UserRole
+  exp: number
 }

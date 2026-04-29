@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, accuracy_score
 import os
 from pathlib import Path
+import shap
 
 def load_config(config_path=None):
     if config_path is None:
@@ -71,6 +72,26 @@ def load_and_preprocess_data(dataset_path):
     
     return X, y, df_encoded.columns.tolist()
 
+# --- Module-level cache ---
+# These are loaded once when the module is imported
+_CONFIG = load_config()
+_MODEL = None
+_FEATURE_NAMES = None
+_X_REF = None
+
+try:
+    _MODEL, _FEATURE_NAMES = load_model(_CONFIG['model_path'])
+    _X_REF, _, _ = load_and_preprocess_data(_CONFIG.get('dataset_path'))
+except Exception:
+    # Fallback for when the model hasn't been trained yet
+    pass
+
+def _ensure_model_loaded():
+    global _MODEL, _FEATURE_NAMES
+    if _MODEL is None:
+        _MODEL, _FEATURE_NAMES = load_model(_CONFIG['model_path'])
+    return _MODEL, _FEATURE_NAMES
+
 def train_model(X, y):
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
@@ -114,13 +135,8 @@ def predict(input_dict):
     Returns:
         Dict with approved (bool), confidence (float), feature_names (list), shap_values (list)
     """
-    # Load model and feature names
-    model, feature_names = load_model()
-    
-    # Load and preprocess data to get the same preprocessing pipeline
-    config = load_config()
-    dataset_path = config['dataset_path']
-    X, y, all_feature_names = load_and_preprocess_data(dataset_path)
+    # Use cached model and feature names
+    model, feature_names = _ensure_model_loaded()
     
     # Convert input dict to DataFrame with same columns as training data
     input_df = pd.DataFrame([input_dict])
@@ -178,7 +194,6 @@ def predict(input_dict):
     confidence = float(pred_proba[0]) if approved else float(pred_proba[1])  # Probability of the predicted class
     
     # Calculate SHAP values
-    import shap
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_encoded)
     

@@ -1,47 +1,37 @@
 {
-  "layout": {
-    "title": "समझदार ऋण XAI",
-    "subtitle": "निष्पक्ष और पारदर्शी ऋण निर्णय",
+  "nav": {
     "dashboard": "डैशबोर्ड",
-    "predict": "भविष्यवाणी",
-    "auditLog": "लेखा-पत्र",
-    "fairness": "न्याय",
-    "export": "निर्यात",
+    "predict": "ऋण के लिए आवेदन करें",
+    "auditLog": "ऑडिट लॉग",
+    "anomalies": "विसंगतियाँ",
+    "fairness": "निष्पक्षता मेट्रिक्स",
+    "export": "रिपोर्ट निर्यात करें",
     "logout": "लॉगआउट"
   },
-  "role": {
-    "applicant": "आवेदक",
-    "auditor": "लेखा-परीक्षक",
-    "regulator": "नियामक"
+  "auth": {
+    "selectRole": "जारी रखने के लिए अपनी भूमिका चुनें",
+    "loginButton": "{{role}} के रूप में लॉगिन करें",
+    "loginTitle": "व्याख्यात्मक ऋण मंच"
   },
   "applicant": {
     "form": {
       "title": "ऋण आवेदन",
-      "description": "नीचे दिए गए फॉर्म को भरें ताकि ऋण निर्णय प्राप्त हो सके",
-      "income": "वार्षिक आय ($)",
-      "loanAmount": "ऋण राशि ($)",
-      "creditHistory": "क्रेडिट स्कोर",
-      "employmentType": "रोजगार प्रकार",
-      "existingLoans": "मौजूदा ऋण",
-      "selectEmployment": "रोजगार प्रकार चुनें",
-      "employmentTypes": {
-        "salaried": "वेतनभोगी",
-        "selfEmployed": "स्व-नियोजित",
-        "unemployed": "बेकार",
-        "student": "छात्र"
-      },
-      "submit": "निर्णय प्राप्त करें",
-      "submitting": "प्रक्रिया हो रही है...",
-      "reset": "फॉर्म रीसेट करें"
+      "income": "वार्षिक आय",
+      "loanAmount": "अनुरोधित ऋण राशि",
+      "creditHistory": "क्रेडिट इतिहास",
+      "employmentType": "रोजगार का प्रकार",
+      "existingLoans": "मौजूदा ऋणों की संख्या",
+      "duration": "ऋण अवधि (महीने)",
+      "age": "आयु",
+      "submit": "आवेदन जमा करें"
     },
     "result": {
-      "approved": "आवेदन स्वीकृत किया गया",
-      "rejected": "आवेदन अस्वीकृत किया गया",
-      "confidence": "विश्वास स्कोर",
-      "explanationTitle": "निर्णय कारक",
-      "suggestions": "सुझाव",
-      "applyAgain": "फिर से आवेदन करें",
-      "error": "आवेदन प्रक्रिया में त्रुटि"
+      "approved": "आवेदन स्वीकृत",
+      "rejected": "आवेदन अस्वीकृत",
+      "confidence": "मॉडल विश्वास",
+      "explanation": "यह निर्णय क्यों?",
+      "suggestions": "अपनी संभावनाओं को कैसे सुधारें?",
+      "applyAgain": "नया आवेदन शुरू करें"
     }
   },
   "auditor": {
@@ -49,93 +39,38 @@
       "total": "कुल आवेदन",
       "approved": "स्वीकृत",
       "rejected": "अस्वीकृत",
-      "anomalies": "विसंगतियां"
-    },
-    "tabs": {
-      "log": "लेखा-पत्र",
-      "anomalies": "विसंगति पता लगाना",
-      "fairness": "न्याय मेट्रिक्स"
-    },
-    "fairness": {
-      "description": "सुरक्षित समूहों के लिए मॉडल न्याय का मूल्यांकन"
-    },
-    "metrics": {
-      "demographicParity": "जनसांख्यिक समानता",
-      "equalizedOdds": "समान राशि",
-      "value": "मूल्य",
-      "threshold": "सीमा"
-    },
-    "status": {
-      "status": "स्थिति",
-      "pass": "पास",
-      "fail": "फेल"
-    },
-    "table": {
-      "timestamp": "समय",
-      "action": "कार्रवाई",
-      "user": "उपयोगकर्ता",
-      "prediction": "भविष्यवाणी",
-      "requestId": "अनुरोध ID"
+      "anomalies": "पता चली विसंगतियाँ"
     },
     "actions": {
-      "verifyChain": "चेन सत्यापित करें",
-      "export": "रिपोर्ट निर्यात",
-      "previous": "पिछला",
-      "next": "अगला",
-      "page": "पृष्ठ"
+      "verifyChain": "हैश चेन सत्यापित करें",
+      "viewDetails": "विवरण देखें"
     },
-    "drift": {
-      "title": "विशेषता ड्रिफ्ट विश्लेषण"
+    "status": {
+      "intact": "चेन बरकरार है",
+      "broken": "{{id}} पर चेन टूट गई है"
     }
   },
   "regulator": {
-    "fairness": {
-      "title": "न्याय अनुपालन डैशबोर्ड",
-      "description": "न्याय अनुपालन के लिए मॉडल की निगरानी करें"
-    },
     "metrics": {
-      "demographicParity": "जनसांख्यिक समानता",
-      "equalizedOdds": "समान राशि",
-      "equalOpportunity": "समान अवसर",
-      "fourFifths": "चार-पांचवाँ नियम"
-    },
-    "status": {
-      "pass": "पास",
-      "fail": "फेल"
-    },
-    "drift": {
-      "title": "मॉडल ड्रिफ्ट निगरानी",
-      "description": "समय के साथ मॉडल प्रदर्शन ड्रिफ्ट का पता लगाएं",
-      "featureDrift": "विशेषता ड्रिफ्ट विश्लेषण",
-      "predictionDrift": "भविष्यवाणी ड्रिफ्ट",
-      "baseline": "आधार",
-      "current": "वर्तमान",
-      "driftScore": "ड्रिफ्ट स्कोर",
-      "stable": "स्थिर",
-      "warning": "चेतावनी",
-      "critical": "महत्वपूर्ण"
+      "demographicParity": "जनसांख्यिकीय समानता अंतर",
+      "equalizedOdds": "बराबरी का अंतर",
+      "fourFifths": "चार-पांचवां नियम स्थिति"
     },
     "export": {
-      "title": "रिपोर्ट निर्यात करें",
-      "description": "अनुपालन रिपोर्ट जनरेट करें",
-      "pdf": "PDF निर्यात करें",
-      "csv": "CSV निर्यात करें",
-      "success": "निर्यात सफलतापूर्वक पूरा हुआ",
-      "error": "निर्यात विफल रहा"
+      "pdf": "PDF के रूप में निर्यात करें",
+      "csv": "CSV के रूप में निर्यात करें"
+    },
+    "drift": {
+      "title": "डेटा ड्रिफ्ट रिपोर्ट",
+      "stable": "स्थिर",
+      "warning": "चेतावनी",
+      "critical": "गंभीर"
     }
   },
-  "login": {
-    "title": "साइन इन",
-    "description": "सिस्टम तक पहुंचने के लिए अपना प्रमाणीकरण टोकन दर्ज करें",
-    "token": "प्रमाणीकरण टोकन",
-    "tokenPlaceholder": "JWT टोकन दर्ज करें...",
-    "signIn": "साइन इन",
-    "signingIn": "साइन इन हो रहा है...",
-    "error": {
-      "tokenRequired": "टोकन आवश्यक है",
-      "invalid": "अमान्य टोकन"
-    },
-    "demoNote": "डेमो: किसी भी टोकन मान को दर्ज करके साइन इन करें।",
-    "demoRoles": "उपलब्ध डेमो भूमिकाएं:"
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "error": "एक त्रुटि हुई",
+    "retry": "पुनः प्रयास करें",
+    "noData": "कोई डेटा उपलब्ध नहीं है"
   }
 }

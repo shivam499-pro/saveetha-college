@@ -1,288 +1,157 @@
-import React from "react"
-import { useTranslation } from "react-i18next"
-import { useFairness } from "../hooks/useFairness"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
-import { Alert, AlertDescription } from "../components/ui/alert"
-import { Button } from "../components/ui/button"
-import { Progress } from "../components/ui/progress"
-import { Skeleton } from "../components/ui/skeleton"
-import { AlertCircle, CheckCircle2, XCircle, Download } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import type { FairnessMetrics, DriftReport } from "../types"
+import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
+import { getFairnessMetrics, getDriftReport, exportReport } from '@/lib/api'
+import { FairnessMetrics, DriftReport } from '@/types'
+import { Scale, Activity, Download, FileJson, FileText as FilePdf, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import Layout from '@/components/Layout'
 
 const RegulatorView: React.FC = () => {
   const { t } = useTranslation()
-  const { fairnessMetrics, driftReport, loading, error, refetch } = useFairness()
+  const [metrics, setMetrics] = useState<FairnessMetrics | null>(null)
+  const [drift, setDrift] = useState<DriftReport | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const handleExportPDF = async () => {
-    // TODO: Implement PDF export
-    console.log("Export PDF clicked")
-  }
+  useEffect(() => {
+    fetchData()
+  }, [])
 
-  const handleExportCSV = async () => {
-    // TODO: Implement CSV export
-    console.log("Export CSV clicked")
-  }
-
-  const getStatusColor = (status: "stable" | "warning" | "critical") => {
-    switch (status) {
-      case "stable":
-        return "text-green-600"
-      case "warning":
-        return "text-orange-600"
-      case "critical":
-        return "text-red-600"
-      default:
-        return "text-gray-600"
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [metricsRes, driftRes] = await Promise.all([
+        getFairnessMetrics(),
+        getDriftReport()
+      ])
+      setMetrics(metricsRes.data)
+      setDrift(driftRes.data)
+    } catch (error) {
+      console.error('Failed to fetch regulator data', error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getStatusIcon = (status: "stable" | "warning" | "critical") => {
-    switch (status) {
-      case "stable":
-        return <CheckCircle2 className="h-4 w-4" />
-      case "warning":
-        return <AlertCircle className="h-4 w-4" />
-      case "critical":
-        return <XCircle className="h-4 w-4" />
-      default:
-        return null
+  const handleExport = async (format: 'pdf' | 'csv') => {
+    try {
+      const response = await exportReport(format)
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `compliance_report_${new Date().toISOString().split('T')[0]}.${format}`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (error) {
+      console.error('Export failed', error)
     }
   }
-
-  const driftData = driftReport?.feature_drift
-    ? Object.entries(driftReport.feature_drift).map(([feature, data]) => ({
-        feature,
-        driftScore: data.drift_score,
-        baseline: data.baseline_mean,
-        current: data.current_mean,
-      }))
-    : []
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Fairness Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("regulator.fairness.title")}</CardTitle>
-          <CardDescription>{t("regulator.fairness.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
+    <Layout>
+      <div className="space-y-8">
+        {/* Section A: Fairness Metrics */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-[#0A1628] flex items-center gap-2">
+              <Scale className="text-[#F4B942]" />
+              {t('nav.fairness')}
+            </h2>
+            <div className="flex gap-2">
+              <Button onClick={() => handleExport('pdf')} variant="outline" className="border-[#0A1628] text-[#0A1628] hover:bg-[#0A1628] hover:text-white">
+                <FilePdf className="mr-2 h-4 w-4" />
+                {t('regulator.export.pdf')}
+              </Button>
+              <Button onClick={() => handleExport('csv')} variant="outline" className="border-[#0A1628] text-[#0A1628] hover:bg-[#0A1628] hover:text-white">
+                <FileJson className="mr-2 h-4 w-4" />
+                {t('regulator.export.csv')}
+              </Button>
             </div>
-          ) : error ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : fairnessMetrics ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* Demographic Parity */}
-              <Card className="border-l-4 border-l-blue-500">
-                <CardContent className="pt-6">
-                  <h4 className="font-semibold mb-2">{t("regulator.metrics.demographicParity")}</h4>
-                  <div className="text-2xl font-bold mb-2">
-                    {(fairnessMetrics.demographic_parity.value * 100).toFixed(1)}%
-                  </div>
-                  <Progress value={fairnessMetrics.demographic_parity.value * 100} className="h-2" />
-                  <div className="flex items-center gap-2 mt-2">
-                    {fairnessMetrics.demographic_parity.passes ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {t("regulator.status.pass")}
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        {t("regulator.status.fail")}
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Equalized Odds */}
-              <Card className="border-l-4 border-l-purple-500">
-                <CardContent className="pt-6">
-                  <h4 className="font-semibold mb-2">{t("regulator.metrics.equalizedOdds")}</h4>
-                  <div className="text-2xl font-bold mb-2">
-                    {(fairnessMetrics.equalized_odds.value * 100).toFixed(1)}%
-                  </div>
-                  <Progress value={fairnessMetrics.equalized_odds.value * 100} className="h-2" />
-                  <div className="flex items-center gap-2 mt-2">
-                    {fairnessMetrics.equalized_odds.passes ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {t("regulator.status.pass")}
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        {t("regulator.status.fail")}
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Equal Opportunity */}
-              <Card className="border-l-4 border-l-green-500">
-                <CardContent className="pt-6">
-                  <h4 className="font-semibold mb-2">{t("regulator.metrics.equalOpportunity")}</h4>
-                  <div className="text-2xl font-bold mb-2">
-                    {(fairnessMetrics.equal_opportunity.value * 100).toFixed(1)}%
-                  </div>
-                  <Progress value={fairnessMetrics.equal_opportunity.value * 100} className="h-2" />
-                  <div className="flex items-center gap-2 mt-2">
-                    {fairnessMetrics.equal_opportunity.passes ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {t("regulator.status.pass")}
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        {t("regulator.status.fail")}
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Four Fifths Rule */}
-              <Card className="border-l-4 border-l-orange-500">
-                <CardContent className="pt-6">
-                  <h4 className="font-semibold mb-2">{t("regulator.metrics.fourFifths")}</h4>
-                  <div className="text-2xl font-bold mb-2">
-                    {(fairnessMetrics.four_fifths_rule.value * 100).toFixed(1)}%
-                  </div>
-                  <Progress value={fairnessMetrics.four_fifths_rule.value * 100} className="h-2" />
-                  <div className="flex items-center gap-2 mt-2">
-                    {fairnessMetrics.four_fifths_rule.passes ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {t("regulator.status.pass")}
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        {t("regulator.status.fail")}
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      {/* Drift Report */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("regulator.drift.title")}</CardTitle>
-          <CardDescription>{t("regulator.drift.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {driftReport ? (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold mb-4">{t("regulator.drift.featureDrift")}</h4>
-                  <div className="space-y-4">
-                    {Object.entries(driftReport.feature_drift).map(([feature, data]) => (
-                      <div key={feature} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium capitalize">{feature.replace(/_/g, " ")}</p>
-                          <p className="text-sm text-gray-600">
-                            {t("regulator.drift.baseline")}: {data.baseline_mean.toFixed(4)} →{" "}
-                            {t("regulator.drift.current")}: {data.current_mean.toFixed(4)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(data.status)}
-                          <span className={getStatusColor(data.status)}>
-                            {t(`regulator.drift.${data.status}`)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-4">{t("regulator.drift.predictionDrift")}</h4>
-                  <div className="space-y-4">
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="font-medium">{t("regulator.drift.approvalRate")}</p>
-                      <p className="text-2xl font-bold mt-1">
-                        {(driftReport.prediction_drift.current_approval_rate * 100).toFixed(1)}%
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {t("regulator.drift.baseline")}: {(driftReport.prediction_drift.baseline_approval_rate * 100).toFixed(1)}%
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="font-medium">{t("regulator.drift.driftScore")}</p>
-                      <p className="text-2xl font-bold mt-1">
-                        {driftReport.prediction_drift.drift_score.toFixed(4)}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getStatusIcon(driftReport.prediction_drift.status)}
-                        <span className={getStatusColor(driftReport.prediction_drift.status)}>
-                          {t(`regulator.drift.${driftReport.prediction_drift.status}`)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={driftData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="feature" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="driftScore" stroke="#F4B942" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Export Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("regulator.export.title")}</CardTitle>
-          <CardDescription>{t("regulator.export.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <Button onClick={handleExportPDF}>
-              <Download className="mr-2 h-4 w-4" />
-              {t("regulator.export.pdf")}
-            </Button>
-            <Button variant="outline" onClick={handleExportCSV}>
-              <Download className="mr-2 h-4 w-4" />
-              {t("regulator.export.csv")}
-            </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {metrics && Object.entries(metrics).map(([attr, m]) => (
+              <Card key={attr} className="border-none shadow-lg">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-md font-bold capitalize">{attr.replace('_', ' ')}</CardTitle>
+                    <div className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                      m.four_fifths_pass ? 'bg-green-100 text-green-700 border-transparent' : 'bg-red-100 text-red-700 border-transparent')}>
+                      {m.four_fifths_pass ? 'PASS' : 'FAIL'}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs font-medium text-gray-500">
+                      <span>{t('regulator.metrics.demographicParity')}</span>
+                      <span>{(m.demographic_parity_difference * 100).toFixed(1)}%</span>
+                    </div>
+                    <Progress value={m.demographic_parity_difference * 100} className="h-2" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs font-medium text-gray-500">
+                      <span>{t('regulator.metrics.equalizedOdds')}</span>
+                      <span>{(m.equalized_odds_difference * 100).toFixed(1)}%</span>
+                    </div>
+                    <Progress value={m.equalized_odds_difference * 100} className="h-2" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Section B: Drift Report */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-[#0A1628] flex items-center gap-2">
+            <Activity className="text-[#F4B942]" />
+            {t('regulator.drift.title')}
+          </h2>
+          <Card className="border-none shadow-lg">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-bold">{t('applicant.form.title')}</th>
+                      <th className="px-6 py-4 text-left font-bold">Score</th>
+                      <th className="px-6 py-4 text-left font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {drift && Object.entries(drift).map(([feature, d]) => (
+                      <tr key={feature}>
+                        <td className="px-6 py-4 font-medium capitalize">{feature.replace('_', ' ')}</td>
+                        <td className="px-6 py-4 font-mono">{d.drift_score.toFixed(4)}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {d.drift_detected ? (
+                              <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 border-transparent">
+                                <AlertTriangle size={12} className="mr-1" />
+                                {t('regulator.drift.critical')}
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-green-100 text-green-700 border-transparent">
+                                <CheckCircle size={12} className="mr-1" />
+                                {t('regulator.drift.stable')}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+    </Layout>
   )
 }
 

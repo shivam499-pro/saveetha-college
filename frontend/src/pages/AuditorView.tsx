@@ -1,281 +1,210 @@
-import React from "react"
-import { useTranslation } from "react-i18next"
-import { useAuditLog } from "../hooks/useAuditLog"
-import { useFairness } from "../hooks/useFairness"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
-import { Alert, AlertDescription } from "../components/ui/alert"
-import { Button } from "../components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
-import { Skeleton } from "../components/ui/skeleton"
-import { AlertCircle, CheckCircle2, XCircle, RefreshCw } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
-import type { AuditEntry } from "../types"
+import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { getDashboardStats, getAuditLog, verifyChain } from '@/lib/api'
+import { DashboardStats, AuditEntry } from '@/types'
+import { LayoutDashboard, FileText, ShieldAlert, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import Layout from '@/components/Layout'
 
 const AuditorView: React.FC = () => {
   const { t } = useTranslation()
-  const { entries, total, page, pageSize, loading, error, fetchPage } = useAuditLog(1, 10)
-  const { fairnessMetrics, driftReport, loading: fairnessLoading, error: fairnessError, refetch } = useFairness()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [logs, setLogs] = useState<AuditEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [verifying, setVerifying] = useState(false)
+  const [verificationResult, setVerificationResult] = useState<{ valid: boolean; broken_at: string | null } | null>(null)
 
-  const handleVerifyChain = async () => {
-    // TODO: Implement chain verification
-    console.log("Verify chain clicked")
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [statsRes, logsRes] = await Promise.all([
+        getDashboardStats(),
+        getAuditLog(1, 100)
+      ])
+      setStats(statsRes.data)
+      setLogs(logsRes.data.data)
+    } catch (error) {
+      console.error('Failed to fetch auditor data', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleExport = async () => {
-    // TODO: Implement export
-    console.log("Export clicked")
+  const handleVerify = async () => {
+    setVerifying(true)
+    try {
+      const response = await verifyChain()
+      setVerificationResult(response.data)
+    } catch (error) {
+      console.error('Verification failed', error)
+    } finally {
+      setVerifying(false)
+    }
   }
-
-  const chartData = entries.map((entry: AuditEntry) => ({
-    date: new Date(entry.timestamp).toLocaleDateString(),
-    approved: entry.prediction === "approved" ? 1 : 0,
-    rejected: entry.prediction === "rejected" ? 1 : 0,
-  }))
-
-  const driftData = driftReport?.feature_drift
-    ? Object.entries(driftReport.feature_drift).map(([feature, data]) => ({
-        feature,
-        driftScore: data.drift_score,
-        status: data.status,
-      }))
-    : []
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("auditor.stats.total")}</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{fairnessLoading ? <Skeleton className="h-8 w-20" /> : total}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("auditor.stats.approved")}</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {fairnessLoading ? <Skeleton className="h-8 w-20" /> : entries.filter((e: AuditEntry) => e.prediction === "approved").length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("auditor.stats.rejected")}</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {fairnessLoading ? <Skeleton className="h-8 w-20" /> : entries.filter((e: AuditEntry) => e.prediction === "rejected").length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("auditor.stats.anomalies")}</CardTitle>
-            <AlertCircle className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {fairnessLoading ? <Skeleton className="h-8 w-20" /> : driftReport?.feature_drift
-                ? Object.values(driftReport.feature_drift).filter((d) => d.status !== "stable").length
-                : 0}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <Layout>
+      <div className="space-y-8">
+        <Tabs defaultValue="dashboard" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-8 bg-[#0A1628]/5 p-1 h-14">
+            <TabsTrigger value="dashboard" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              {t('nav.dashboard')}
+            </TabsTrigger>
+            <TabsTrigger value="logs" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
+              <FileText className="mr-2 h-4 w-4" />
+              {t('nav.auditLog')}
+            </TabsTrigger>
+            <TabsTrigger value="anomalies" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
+              <ShieldAlert className="mr-2 h-4 w-4" />
+              {t('nav.anomalies')}
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Fairness Metrics */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("auditor.tabs.fairness")}</CardTitle>
-          <CardDescription>{t("auditor.fairness.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {fairnessLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          ) : fairnessError ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{fairnessError}</AlertDescription>
-            </Alert>
-          ) : fairnessMetrics ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-semibold mb-4">{t("auditor.metrics.demographicParity")}</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>{t("auditor.metrics.value")}:</span>
-                    <span className="font-mono">{fairnessMetrics.demographic_parity.value.toFixed(4)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("auditor.metrics.threshold")}:</span>
-                    <span className="font-mono">{fairnessMetrics.demographic_parity.threshold}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span>{t("auditor.status.status")}:</span>
-                    {fairnessMetrics.demographic_parity.passes ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {t("auditor.status.pass")}
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        {t("auditor.status.fail")}
-                      </span>
-                    )}
-                  </div>
-                </div>
+          <TabsContent value="dashboard" className="space-y-6">
+            {stats ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {[
+                  { label: t('auditor.stats.total'), value: stats.total, color: 'text-[#0A1628]' },
+                  { label: t('auditor.stats.approved'), value: stats.approved, color: 'text-green-600' },
+                  { label: t('auditor.stats.rejected'), value: stats.rejected, color: 'text-red-600' },
+                  { label: t('auditor.stats.anomalies'), value: stats.anomaly_count, color: 'text-[#F4B942]' },
+                ].map((s, i) => (
+                  <Card key={i} className="border-none shadow-md overflow-hidden">
+                    <div className="h-1 bg-[#0A1628]/10" />
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-500 uppercase">{s.label}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className={`text-3xl font-black ${s.color}`}>{s.value}</div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <div>
-                <h4 className="font-semibold mb-4">{t("auditor.metrics.equalizedOdds")}</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>{t("auditor.metrics.value")}:</span>
-                    <span className="font-mono">{fairnessMetrics.equalized_odds.value.toFixed(4)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("auditor.metrics.threshold")}:</span>
-                    <span className="font-mono">{fairnessMetrics.equalized_odds.threshold}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span>{t("auditor.status.status")}:</span>
-                    {fairnessMetrics.equalized_odds.passes ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {t("auditor.status.pass")}
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        {t("auditor.status.fail")}
-                      </span>
-                    )}
-                  </div>
-                </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-6">
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
               </div>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            )}
 
-      {/* Tabs for Log and Anomalies */}
-      <Tabs defaultValue="log" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="log">{t("auditor.tabs.log")}</TabsTrigger>
-          <TabsTrigger value="anomalies">{t("auditor.tabs.anomalies")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="log">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("auditor.tabs.log")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
+            <Card className="border-none shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>{t('nav.auditLog')}</CardTitle>
+                <div className="flex items-center gap-4">
+                  {verificationResult && (
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${verificationResult.valid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {verificationResult.valid ? (
+                        <><CheckCircle2 size={16} /> {t('auditor.status.intact')}</>
+                      ) : (
+                        <><AlertTriangle size={16} /> {t('auditor.status.broken', { id: verificationResult.broken_at })}</>
+                      )}
+                    </div>
+                  )}
+                  <Button 
+                    onClick={handleVerify} 
+                    disabled={verifying}
+                    className="bg-[#0A1628] hover:bg-[#F4B942] hover:text-[#0A1628]"
+                  >
+                    {verifying ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                    {t('auditor.actions.verifyChain')}
+                  </Button>
                 </div>
-              ) : error ? (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              ) : (
-                <>
-                  <div className="rounded-md border">
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader className="bg-gray-50">
+                      <TableRow>
+                        <TableHead className="font-bold">ID</TableHead>
+                        <TableHead className="font-bold">Time</TableHead>
+                        <TableHead className="font-bold">Decision</TableHead>
+                        <TableHead className="font-bold">Confidence</TableHead>
+                        <TableHead className="font-bold">Hash</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {logs.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="font-mono text-xs">{log.id.substring(0, 8)}...</TableCell>
+                          <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <div className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", 
+                              log.prediction ? 'bg-green-100 text-green-700 border-transparent' : 'bg-red-100 text-red-700 border-transparent')}>
+                              {log.prediction ? 'APPROVED' : 'REJECTED'}
+                            </div>
+                          </TableCell>
+                          <TableCell>{(log.confidence * 100).toFixed(1)}%</TableCell>
+                          <TableCell className="font-mono text-[10px] text-gray-400">
+                            {log.current_hash?.substring(0, 16)}...
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="logs">
+             <Card className="border-none shadow-lg">
+                <CardHeader>
+                  <CardTitle>{t('nav.auditLog')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* Reuse table logic from above if needed or add unique filters */}
+                  <p className="text-gray-500">{t('common.noData')}</p>
+                </CardContent>
+             </Card>
+          </TabsContent>
+
+          <TabsContent value="anomalies">
+             <Card className="border-none shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-red-600 flex items-center gap-2">
+                    <ShieldAlert />
+                    {t('nav.anomalies')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                   <div className="rounded-md border">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="bg-red-50">
                         <TableRow>
-                          <TableHead>{t("auditor.table.timestamp")}</TableHead>
-                          <TableHead>{t("auditor.table.action")}</TableHead>
-                          <TableHead>{t("auditor.table.user")}</TableHead>
-                          <TableHead>{t("auditor.table.prediction")}</TableHead>
-                          <TableHead>{t("auditor.table.requestId")}</TableHead>
+                          <TableHead className="font-bold">ID</TableHead>
+                          <TableHead className="font-bold">Reason</TableHead>
+                          <TableHead className="font-bold">Confidence</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {entries.map((entry: AuditEntry) => (
-                          <TableRow key={entry.id}>
-                            <TableCell>{new Date(entry.timestamp).toLocaleString()}</TableCell>
-                            <TableCell>{entry.action}</TableCell>
-                            <TableCell>{entry.user_id}</TableCell>
-                            <TableCell>
-                              <span className={entry.prediction === "approved" ? "text-green-600" : "text-red-600"}>
-                                {entry.prediction}
-                              </span>
-                            </TableCell>
-                            <TableCell className="font-mono text-sm">{entry.request_id}</TableCell>
+                        {logs.filter(l => l.confidence < 0.6).map((log) => (
+                          <TableRow key={log.id} className="bg-red-50/20">
+                            <TableCell className="font-mono text-xs">{log.id}</TableCell>
+                            <TableCell className="text-red-700 font-medium">Low Confidence Deviation</TableCell>
+                            <TableCell className="text-red-700 font-bold">{(log.confidence * 100).toFixed(1)}%</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
-                  <div className="flex justify-between items-center mt-4">
-                    <Button onClick={() => fetchPage(page - 1, pageSize)} disabled={page <= 1}>
-                      {t("auditor.actions.previous")}
-                    </Button>
-                    <span className="text-sm text-gray-500">
-                      {t("auditor.actions.page")} {page}
-                    </span>
-                    <Button onClick={() => fetchPage(page + 1, pageSize)} disabled={page * pageSize >= total}>
-                      {t("auditor.actions.next")}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="anomalies">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("auditor.tabs.anomalies")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex gap-4">
-                  <Button onClick={handleVerifyChain}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    {t("auditor.actions.verifyChain")}
-                  </Button>
-                  <Button variant="outline" onClick={handleExport}>
-                    {t("auditor.actions.export")}
-                  </Button>
-                </div>
-                {driftReport && (
-                  <div>
-                    <h4 className="font-semibold mb-4">{t("auditor.drift.title")}</h4>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={driftData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="feature" />
-                          <YAxis />
-                          <Tooltip />
-                          <Bar dataKey="driftScore" fill="#F4B942" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+                </CardContent>
+             </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </Layout>
   )
 }
 
