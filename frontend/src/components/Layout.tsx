@@ -1,8 +1,7 @@
 import React from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, FileText, ShieldAlert, Scale, Download, LogOut, ShieldCheck, ChevronRight } from 'lucide-react'
-import { cn } from "@/lib/utils"
+import { LayoutDashboard, FileText, ShieldAlert, Scale, Download, LogOut, ShieldCheck } from 'lucide-react'
 import { getRole, logout } from "@/lib/auth"
 import LanguageSwitcher from "@/components/LanguageSwitcher"
 
@@ -41,81 +40,163 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const currentNavItems = role ? navItems[role] || [] : []
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] font-sans">
+    <div style={{ display: 'flex', height: '100vh', background: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
+      
       {/* Sidebar */}
-      <aside className="w-[280px] bg-navy text-white flex flex-col shadow-2xl z-20 overflow-hidden relative">
-        {/* Sidebar background decoration */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gold/10 rounded-full blur-3xl -mr-16 -mt-16" />
-        
-        <div className="p-8 relative z-10">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="bg-gold p-2 rounded-xl">
-              <ShieldCheck className="text-navy w-6 h-6" />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight font-display">XAI Lending</h1>
+      <aside style={{
+        width: '260px',
+        minWidth: '260px',
+        background: '#0A1628',
+        color: 'white',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
+        position: 'relative',
+        zIndex: 20
+      }}>
+        {/* Logo */}
+        <div style={{
+          padding: '28px 24px 20px',
+          borderBottom: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <ShieldCheck size={28} color="#F4B942" />
+            <span style={{
+              fontSize: '20px',
+              fontWeight: '700',
+              color: 'white',
+              fontFamily: 'Plus Jakarta Sans, sans-serif'
+            }}>XAI Lending</span>
           </div>
-
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gold rounded-full text-[10px] font-black uppercase tracking-widest text-navy mb-10 shadow-lg shadow-gold/20">
-            <div className="w-1.5 h-1.5 rounded-full bg-navy animate-pulse" />
-            {role}
+          {/* Role badge */}
+          <div style={{
+            background: '#F4B942',
+            color: '#0A1628',
+            padding: '4px 12px',
+            borderRadius: '20px',
+            fontSize: '12px',
+            fontWeight: '600',
+            display: 'inline-block',
+            textTransform: 'capitalize'
+          }}>
+            {role || 'Guest'}
           </div>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 relative z-10">
-          {currentNavItems.map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                "group flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-300 text-sm font-semibold",
-                location.pathname === item.href
-                  ? "bg-gold text-navy shadow-lg shadow-gold/10"
-                  : "text-white/60 hover:bg-white/5 hover:text-white"
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <item.icon size={20} className={cn(
-                  "transition-transform duration-300 group-hover:scale-110",
-                  location.pathname === item.href ? "text-navy" : "text-white/40 group-hover:text-gold"
-                )} />
-                {item.label}
-              </div>
-              {location.pathname === item.href && <ChevronRight size={16} />}
-            </Link>
-          ))}
+        {/* Nav items */}
+        <nav style={{ flex: 1, padding: '16px 12px' }}>
+          {currentNavItems.map((item) => {
+            const Icon = item.icon
+            const isActive = location.pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  marginBottom: '4px',
+                  textDecoration: 'none',
+                  background: isActive ? '#F4B942' : 'transparent',
+                  color: isActive ? '#0A1628' : 'rgba(255,255,255,0.75)',
+                  fontWeight: isActive ? '600' : '400',
+                  fontSize: '14px',
+                  transition: 'all 0.2s',
+                  borderLeft: isActive ? '3px solid #0A1628' : '3px solid transparent',
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
+                    ;(e.currentTarget as HTMLElement).style.color = 'white'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent'
+                    ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.75)'
+                  }
+                }}
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
         </nav>
 
-        <div className="p-6 relative z-10">
+        {/* Logout */}
+        <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-6 py-4 w-full text-sm font-bold text-red-400 hover:bg-red-400/10 rounded-2xl transition-all duration-300 group"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              width: '100%',
+              background: 'transparent',
+              color: 'rgba(255,255,255,0.6)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.15)'
+              ;(e.currentTarget as HTMLElement).style.color = '#ef4444'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.background = 'transparent'
+              ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'
+            }}
           >
-            <LogOut size={20} className="transition-transform group-hover:-translate-x-1" />
-            {t('nav.logout')}
+            <LogOut size={18} />
+            <span>{t('nav.logout')}</span>
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-20 border-b border-gray-100 flex items-center justify-between px-10 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex flex-col">
-            <h2 className="text-xl font-bold text-navy tracking-tight font-display">
-              {currentNavItems.find(i => i.href === location.pathname)?.label || t('nav.dashboard')}
-            </h2>
-            <div className="text-xs font-medium text-gray-400">
-              System active & secure
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-6">
-            <div className="bg-navy/5 p-1 rounded-full border border-navy/5">
-              <LanguageSwitcher />
-            </div>
+      {/* Main content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        
+        {/* Top bar */}
+        <header style={{
+          background: 'white',
+          borderBottom: '1px solid #E5E7EB',
+          padding: '0 32px',
+          height: '64px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10
+        }}>
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: '700',
+            color: '#0A1628',
+            fontFamily: 'Plus Jakarta Sans, sans-serif'
+          }}>
+            {currentNavItems.find(i => i.href === location.pathname)?.label || 'Dashboard'}
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <LanguageSwitcher />
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-10 animate-fadeIn">
+        {/* Page content */}
+        <main style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '32px',
+          background: '#F8FAFC'
+        }}>
           {children}
         </main>
       </div>

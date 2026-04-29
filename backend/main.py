@@ -277,13 +277,24 @@ def get_fairness_metrics(role: str = Depends(regulator_only)):
 # ---------------------------------------------------------------------------
 # GET /api/v1/fairness/drift
 # ---------------------------------------------------------------------------
-
 @app.get("/api/v1/fairness/drift", tags=["Fairness"])
 def get_data_drift(role: str = Depends(regulator_only)):
-    report = fairness_evaluator.get_drift_report()
-    if "error" in report:
-        raise HTTPException(status_code=400, detail=report["error"])
-    return report
+    """
+    Return KS-test drift report for all numerical features.
+    Regulator role required.
+    """
+    full_report = fairness_evaluator.run_full_evaluation()
+    raw_drift   = full_report["drift_report"]
+
+    # Transform list → dict keyed by feature name (matches frontend shape)
+    # Frontend expects: { feature_name: { drift_score, drift_detected } }
+    transformed = {}
+    for feat in raw_drift["features"]:
+        transformed[feat["feature"]] = {
+            "drift_score":     feat["ks_statistic"],
+            "drift_detected":  feat["drifted"],
+        }
+    return transformed
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/dashboard/stats
@@ -313,8 +324,10 @@ async def export_report(
     format: str = Query(..., pattern="^(pdf|csv)$", description="pdf or csv"),
     role: str = Depends(regulator_only),
 ):
-    metrics = fairness_evaluator.get_fairness_report()
-    drift   = fairness_evaluator.get_drift_report()
+    # ── Run once, get both reports ──────────────────────────────────────────
+    full_eval = fairness_evaluator.run_full_evaluation()
+    metrics   = full_eval["fairness_report"]
+    raw_drift = full_eval["drift_report"]   # { drift_detected, features: [...] }
 
     all_logs      = await audit_logger.get_log(1, 10000)
     total         = len(all_logs)
@@ -322,7 +335,7 @@ async def export_report(
     rejected      = total - approved
     approval_rate = round((approved / total * 100), 2) if total > 0 else 0.0
     anomaly_count = len(await audit_logger.flag_anomalies())
-    
+
     # ---- CSV ---------------------------------------------------------------
     if format == "csv":
         output = io.StringIO()
@@ -337,24 +350,31 @@ async def export_report(
         writer.writerow(["Anomalies Detected", anomaly_count])
         writer.writerow([])
 
-        if "error" not in drift:
-            writer.writerow(["=== DATA DRIFT ==="])
-            writer.writerow(["Dataset Drift Detected", drift.get("dataset_drift")])
-            writer.writerow(["Drifted Columns",        drift.get("number_of_drifted_columns")])
-            writer.writerow(["Drift Share",             drift.get("share_of_drifted_columns")])
-            writer.writerow([])
+        # Drift — uses actual keys from your KS-test report
+        writer.writerow(["=== DATA DRIFT ==="])
+        writer.writerow(["Overall Drift Detected", raw_drift.get("drift_detected")])
+        writer.writerow([])
+        writer.writerow(["Feature", "KS Statistic", "P-Value", "Status"])
+        for feat in raw_drift.get("features", []):
+            writer.writerow([
+                feat["feature"],
+                round(feat["ks_statistic"], 4),
+                round(feat["p_value"], 4),
+                "DRIFTED" if feat["drifted"] else "STABLE",
+            ])
+        writer.writerow([])
 
-        if "error" not in metrics:
-            writer.writerow(["=== FAIRNESS METRICS ==="])
-            for attr, group_metrics in metrics.items():
-                writer.writerow([f"--- {attr} ---"])
-                for k, v in group_metrics.items():
-                    if k == "selection_rates":
-                        for grp, rate in v.items():
-                            writer.writerow([f"  selection_rate ({grp})", round(rate, 4)])
-                    else:
-                        writer.writerow([f"  {k}", v])
-                writer.writerow([])
+        # Fairness
+        writer.writerow(["=== FAIRNESS METRICS ==="])
+        for attr, group_metrics in metrics.items():
+            writer.writerow([f"--- {attr} ---"])
+            for k, v in group_metrics.items():
+                if k == "selection_rates":
+                    for grp, rate in v.items():
+                        writer.writerow([f"  selection_rate ({grp})", round(rate, 4)])
+                else:
+                    writer.writerow([f"  {k}", v])
+            writer.writerow([])
 
         csv_bytes = output.getvalue().encode("utf-8")
         response  = Response(content=csv_bytes, media_type="text/csv")
@@ -414,24 +434,25 @@ async def export_report(
         ]:
             y = row(label, value, y)
             y = check_page(y)
-
         y -= 16
 
-        # Drift
-        if "error" not in drift:
+        # Drift — uses actual KS-test structure
+        y = check_page(y)
+        y = header("Data Drift", y)
+        y = row("Overall Drift Detected", raw_drift.get("drift_detected"), y)
+        y -= 8
+        for feat in raw_drift.get("features", []):
             y = check_page(y)
-            y = header("Data Drift", y)
-            for label, value in [
-                ("Dataset Drift Detected",  drift.get("dataset_drift")),
-                ("Drifted Columns",         drift.get("number_of_drifted_columns")),
-                ("Share of Drifted Columns",drift.get("share_of_drifted_columns")),
-            ]:
-                y = row(label, value, y)
-                y = check_page(y)
-            y -= 16
+            status = "DRIFTED" if feat["drifted"] else "STABLE"
+            y = row(
+                feat["feature"],
+                f"KS={feat['ks_statistic']:.3f}  p={feat['p_value']:.3f}  [{status}]",
+                y, indent=10
+            )
+        y -= 16
 
         # Fairness
-        if "error" not in metrics:
+        if metrics:
             y = check_page(y)
             y = header("Fairness Metrics", y)
             for attr, gm in metrics.items():

@@ -3,16 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
 import { predict } from '@/lib/api'
 import { PredictionRequest, PredictionResponse } from '@/types'
-import { CheckCircle2, XCircle, ArrowUpRight, ArrowDownRight, RefreshCcw, Info, Lightbulb, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { CheckCircle2, XCircle, ArrowUpRight, ArrowDownRight, RefreshCcw, Lightbulb, Loader2, TrendingUp } from 'lucide-react'
 import Layout from '@/components/Layout'
 
 const formSchema = z.object({
@@ -25,11 +18,99 @@ const formSchema = z.object({
   age: z.number().min(18),
 })
 
+const S = {
+  page: { maxWidth: '900px', margin: '0 auto' } as React.CSSProperties,
+  card: {
+    background: 'white',
+    borderRadius: '20px',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+    marginBottom: '24px',
+  } as React.CSSProperties,
+  cardHeader: {
+    padding: '28px 32px 20px',
+    borderBottom: '1px solid #F1F5F9',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  } as React.CSSProperties,
+  cardTitle: {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#0A1628',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+    margin: 0,
+  } as React.CSSProperties,
+  accentBar: {
+    width: '4px',
+    height: '28px',
+    background: '#F4B942',
+    borderRadius: '4px',
+  } as React.CSSProperties,
+  cardBody: { padding: '32px' } as React.CSSProperties,
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '20px',
+  } as React.CSSProperties,
+  fieldGroup: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
+  label: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#0A1628',
+    letterSpacing: '0.02em',
+  } as React.CSSProperties,
+  input: {
+    height: '46px',
+    padding: '0 16px',
+    borderRadius: '10px',
+    border: '1.5px solid #E2E8F0',
+    fontSize: '15px',
+    color: '#0A1628',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    transition: 'border-color 0.2s',
+    fontFamily: 'Inter, sans-serif',
+  } as React.CSSProperties,
+  select: {
+    height: '46px',
+    padding: '0 16px',
+    borderRadius: '10px',
+    border: '1.5px solid #E2E8F0',
+    fontSize: '15px',
+    color: '#0A1628',
+    outline: 'none',
+    width: '100%',
+    background: 'white',
+    cursor: 'pointer',
+    fontFamily: 'Inter, sans-serif',
+  } as React.CSSProperties,
+  submitBtn: {
+    width: '100%',
+    height: '52px',
+    background: '#0A1628',
+    color: '#F4B942',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '16px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    marginTop: '8px',
+    transition: 'all 0.2s',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+  } as React.CSSProperties,
+}
+
 const ApplicantView: React.FC = () => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PredictionResponse | null>(null)
-  const [showAllExplanations, setShowAllExplanations] = useState(false)
+  const [showAll, setShowAll] = useState(false)
 
   const { register, handleSubmit, setValue, watch, reset } = useForm<PredictionRequest>({
     resolver: zodResolver(formSchema),
@@ -56,265 +137,252 @@ const ApplicantView: React.FC = () => {
     }
   }
 
-  const handleReset = () => {
-    setResult(null)
-    setShowAllExplanations(false)
-    reset()
-  }
-
-  const visibleExplanations = showAllExplanations 
-    ? result?.explanation 
-    : result?.explanation.slice(0, 8)
+  const handleReset = () => { setResult(null); setShowAll(false); reset() }
+  const visible = showAll ? result?.explanation : result?.explanation?.slice(0, 8)
 
   return (
     <Layout>
-      <div className="max-w-5xl mx-auto space-y-10">
-        {!result ? (
-          <div className="animate-slideUp">
-            <Card className="border-none shadow-xl overflow-hidden rounded-2xl bg-white">
-              <div className="h-2 bg-gradient-to-r from-navy to-gold" />
-              <CardHeader className="border-b border-gray-50 p-8">
-                <div className="flex items-center gap-4">
-                  <div className="w-1.5 h-8 bg-gold rounded-full" />
-                  <CardTitle className="text-2xl font-bold text-navy tracking-tight font-display">
-                    {t('applicant.form.title')}
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="p-10">
-                <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.income')}</Label>
-                    <Input 
-                      type="number" 
-                      className="h-12 rounded-xl border-gray-200 focus:ring-gold focus:border-gold transition-all"
-                      {...register('income', { valueAsNumber: true })} 
-                    />
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.loanAmount')}</Label>
-                    <Input 
-                      type="number" 
-                      className="h-12 rounded-xl border-gray-200 focus:ring-gold focus:border-gold transition-all"
-                      {...register('loan_amount', { valueAsNumber: true })} 
-                    />
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.creditHistory')}</Label>
-                    <Select onValueChange={(v) => setValue('credit_history', v)} defaultValue={watch('credit_history')}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-200 focus:ring-gold transition-all">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="excellent">Excellent</SelectItem>
-                        <SelectItem value="good">Good</SelectItem>
-                        <SelectItem value="fair">Fair</SelectItem>
-                        <SelectItem value="poor">Poor</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.employmentType')}</Label>
-                    <Select onValueChange={(v) => setValue('employment_type', v)} defaultValue={watch('employment_type')}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-200 focus:ring-gold transition-all">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="salaried">Salaried</SelectItem>
-                        <SelectItem value="self_employed">Self Employed</SelectItem>
-                        <SelectItem value="unemployed">Unemployed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.existingLoans')}</Label>
-                    <Input 
-                      type="number" 
-                      className="h-12 rounded-xl border-gray-200 focus:ring-gold focus:border-gold transition-all"
-                      {...register('existing_loans', { valueAsNumber: true })} 
-                    />
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.duration')}</Label>
-                    <Input 
-                      type="number" 
-                      className="h-12 rounded-xl border-gray-200 focus:ring-gold focus:border-gold transition-all"
-                      {...register('duration', { valueAsNumber: true })} 
-                    />
-                  </div>
-                  <div className="space-y-2.5">
-                    <Label className="text-sm font-bold text-navy ml-1">{t('applicant.form.age')}</Label>
-                    <Input 
-                      type="number" 
-                      className="h-12 rounded-xl border-gray-200 focus:ring-gold focus:border-gold transition-all"
-                      {...register('age', { valueAsNumber: true })} 
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-2 pt-6">
-                    <Button 
-                      type="submit" 
-                      disabled={loading}
-                      className="w-full bg-navy text-gold hover:bg-gold hover:text-navy h-14 text-lg font-bold rounded-2xl transition-all duration-300 shadow-lg shadow-navy/10 active:scale-[0.98]"
-                    >
-                      {loading ? (
-                        <div className="flex items-center gap-3">
-                          <Loader2 className="animate-spin" />
-                          Analyzing your application...
-                        </div>
-                      ) : t('applicant.form.submit')}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
-          <div className="space-y-10 animate-slideUp">
-            {/* Result Header Card */}
-            <div className={cn(
-              "p-10 rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 border-4 overflow-hidden relative",
-              result.approved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-            )}>
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                {result.approved ? <CheckCircle2 size={200} /> : <XCircle size={200} />}
-              </div>
-
-              <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-                <div className={cn(
-                  "p-6 rounded-3xl shadow-inner",
-                  result.approved ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                )}>
-                  {result.approved ? <CheckCircle2 size={48} strokeWidth={2.5} /> : <XCircle size={48} strokeWidth={2.5} />}
-                </div>
-                <div className="text-center md:text-left">
-                  <h2 className={cn(
-                    "text-4xl font-black tracking-tighter font-display mb-2",
-                    result.approved ? 'text-green-800' : 'text-red-800'
-                  )}>
-                    {result.approved ? "APPLICATION APPROVED" : "APPLICATION REJECTED"}
-                  </h2>
-                  <div className="flex items-center justify-center md:justify-start gap-4">
-                    <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full border border-current/10">
-                      <span className="text-sm font-bold opacity-60 uppercase tracking-widest">{t('applicant.result.confidence')}</span>
-                      <span className="text-lg font-black">{(result.confidence * 100).toFixed(0)}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <Button 
-                variant="outline" 
-                onClick={handleReset} 
-                className="bg-white border-navy text-navy hover:bg-navy hover:text-white rounded-2xl h-14 px-8 font-bold transition-all relative z-10"
-              >
-                <RefreshCcw className="mr-2 h-5 w-5" />
-                {t('applicant.result.applyAgain')}
-              </Button>
+      <div style={S.page}>
+        {!result && !loading && (
+          <div style={S.card}>
+            <div style={S.cardHeader}>
+              <div style={S.accentBar} />
+              <h2 style={S.cardTitle}>{t('applicant.form.title')}</h2>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              {/* Explanation Section */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="flex items-center justify-between px-2">
-                  <h3 className="text-xl font-bold text-navy flex items-center gap-3 tracking-tight font-display">
-                    <div className="p-2 bg-navy/5 rounded-lg">
-                      <Info className="text-gold w-5 h-5" />
-                    </div>
-                    Why this decision?
-                  </h3>
+            <div style={S.cardBody}>
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <div style={S.grid}>
+                  {/* Income */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.income')}</label>
+                    <input type="number" style={S.input} {...register('income', { valueAsNumber: true })} />
+                  </div>
+                  {/* Loan Amount */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.loanAmount')}</label>
+                    <input type="number" style={S.input} {...register('loan_amount', { valueAsNumber: true })} />
+                  </div>
+                  {/* Credit History */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.creditHistory')}</label>
+                    <select style={S.select} value={watch('credit_history')} onChange={e => setValue('credit_history', e.target.value)}>
+                      <option value="excellent">Excellent</option>
+                      <option value="good">Good</option>
+                      <option value="fair">Fair</option>
+                      <option value="poor">Poor</option>
+                    </select>
+                  </div>
+                  {/* Employment */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.employmentType')}</label>
+                    <select style={S.select} value={watch('employment_type')} onChange={e => setValue('employment_type', e.target.value)}>
+                      <option value="salaried">Salaried</option>
+                      <option value="self_employed">Self Employed</option>
+                      <option value="unemployed">Unemployed</option>
+                    </select>
+                  </div>
+                  {/* Existing Loans */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.existingLoans')}</label>
+                    <input type="number" style={S.input} {...register('existing_loans', { valueAsNumber: true })} />
+                  </div>
+                  {/* Duration */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.duration')}</label>
+                    <input type="number" style={S.input} {...register('duration', { valueAsNumber: true })} />
+                  </div>
+                  {/* Age */}
+                  <div style={S.fieldGroup}>
+                    <label style={S.label}>{t('applicant.form.age')}</label>
+                    <input type="number" style={S.input} {...register('age', { valueAsNumber: true })} />
+                  </div>
                 </div>
-                
-                <Card className="border-none shadow-xl rounded-[2rem] overflow-hidden">
-                  <CardContent className="p-8 space-y-4">
-                    {visibleExplanations?.map((exp, i) => {
-                      const isPositive = exp.toLowerCase().includes('increase') || exp.toLowerCase().includes('good') || exp.toLowerCase().includes('high')
-                      return (
-                        <div key={i} className={cn(
-                          "flex items-center justify-between p-4 rounded-2xl transition-all hover:scale-[1.01]",
-                          isPositive ? "bg-green-50/50" : "bg-red-50/50"
-                        )}>
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "p-2 rounded-xl",
-                              isPositive ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
-                            )}>
-                              {isPositive ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
-                            </div>
-                            <span className="font-semibold text-navy text-sm md:text-base">{exp}</span>
-                          </div>
-                          <div className={cn(
-                            "px-3 py-1 rounded-full text-xs font-black uppercase tracking-tighter",
-                            isPositive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                          )}>
-                            {isPositive ? 'Positive' : 'Negative'}
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    {result.explanation.length > 8 && (
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => setShowAllExplanations(!showAllExplanations)}
-                        className="w-full text-navy font-bold hover:bg-navy/5 h-12 rounded-xl"
-                      >
-                        {showAllExplanations ? 'Show Less' : `Show All ${result.explanation.length} Factors`}
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Suggestions Section */}
-              <div className="space-y-6">
-                {!result.approved && (
-                  <>
-                    <h3 className="text-xl font-bold text-navy flex items-center gap-3 tracking-tight font-display px-2">
-                      <div className="p-2 bg-gold/10 rounded-lg">
-                        <Lightbulb className="text-gold w-5 h-5" />
-                      </div>
-                      Improvement Tips
-                    </h3>
-                    <Card className="border-none shadow-xl rounded-[2rem] bg-gradient-to-br from-white to-gold/5 border-t-4 border-gold overflow-hidden">
-                      <CardContent className="p-8 space-y-6">
-                        {result.suggestions.map((sug, i) => (
-                          <div key={i} className="flex gap-4 group">
-                            <div className="mt-1">
-                              <div className="bg-gold/20 p-1 rounded-full group-hover:bg-gold transition-colors">
-                                <CheckCircle2 className="text-gold group-hover:text-white" size={14} />
-                              </div>
-                            </div>
-                            <p className="text-sm font-medium text-gray-700 leading-relaxed">{sug}</p>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-                
-                {result.approved && (
-                  <Card className="border-none shadow-xl rounded-[2rem] bg-navy text-white h-full p-8 flex flex-col justify-center items-center text-center">
-                    <div className="p-4 bg-white/10 rounded-3xl mb-6">
-                      <CheckCircle2 size={48} className="text-gold" />
-                    </div>
-                    <h4 className="text-xl font-bold mb-3 font-display">You're all set!</h4>
-                    <p className="text-white/60 text-sm leading-relaxed">
-                      Our experts will contact you within 24 hours to finalize the loan agreement.
-                    </p>
-                  </Card>
-                )}
-              </div>
+                {/* Submit */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '24px' }}>
+                  <button type="submit" disabled={loading} style={S.submitBtn}>
+                    {loading ? <><Loader2 size={18} className="animate-spin" /> Analyzing...</> : t('applicant.form.submit')}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
 
         {loading && (
-          <div className="space-y-8">
-            <Skeleton className="h-20 w-full rounded-[2rem]" />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              <Skeleton className="lg:col-span-2 h-[500px] rounded-[2rem]" />
-              <Skeleton className="h-[500px] rounded-[2rem]" />
+          <div style={{ ...S.card, padding: '60px', textAlign: 'center' }}>
+            <Loader2 size={40} style={{ color: '#F4B942', margin: '0 auto 16px', animation: 'spin 1s linear infinite' }} />
+            <p style={{ color: '#0A1628', fontWeight: '600', fontSize: '16px' }}>Analyzing your application...</p>
+            <p style={{ color: '#6B7280', fontSize: '14px', marginTop: '8px' }}>Our AI is processing your data</p>
+          </div>
+        )}
+
+        {result && (
+          <div>
+            {/* Result Banner */}
+            <div style={{
+              ...S.card,
+              background: result.approved ? 'linear-gradient(135deg, #F0FFF4, #DCFCE7)' : 'linear-gradient(135deg, #FFF5F5, #FEE2E2)',
+              border: `2px solid ${result.approved ? '#86EFAC' : '#FCA5A5'}`,
+              padding: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap' as const,
+              gap: '20px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={{
+                  width: '72px', height: '72px', borderRadius: '50%',
+                  background: result.approved ? '#BBF7D0' : '#FECACA',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {result.approved
+                    ? <CheckCircle2 size={36} color="#16A34A" />
+                    : <XCircle size={36} color="#DC2626" />
+                  }
+                </div>
+                <div>
+                  <h2 style={{
+                    fontSize: '28px', fontWeight: '900', margin: '0 0 8px',
+                    color: result.approved ? '#14532D' : '#7F1D1D',
+                    fontFamily: 'Plus Jakarta Sans, sans-serif',
+                    letterSpacing: '-0.02em',
+                  }}>
+                    {result.approved ? 'APPLICATION APPROVED' : 'APPLICATION REJECTED'}
+                  </h2>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    background: 'white', padding: '6px 14px', borderRadius: '20px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}>
+                    <TrendingUp size={14} color="#F4B942" />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#0A1628' }}>
+                      Model Confidence: {(result.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleReset}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '12px 24px', borderRadius: '12px',
+                  background: 'white', border: '2px solid #0A1628',
+                  color: '#0A1628', fontWeight: '700', cursor: 'pointer',
+                  fontSize: '14px', transition: 'all 0.2s',
+                }}
+              >
+                <RefreshCcw size={16} />
+                {t('applicant.result.applyAgain')}
+              </button>
+            </div>
+
+            {/* Explanation + Suggestions */}
+            <div style={{ display: 'grid', gridTemplateColumns: result.approved ? '1fr' : '2fr 1fr', gap: '24px' }}>
+              {/* Explanation */}
+              <div style={S.card}>
+                <div style={S.cardHeader}>
+                  <div style={S.accentBar} />
+                  <h3 style={S.cardTitle}>Why this decision?</h3>
+                </div>
+                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
+                  {visible?.map((exp, i) => {
+                    const isPos = exp.toLowerCase().includes('helped') || exp.toLowerCase().includes('positive') || exp.toLowerCase().includes('increase')
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        padding: '12px 16px', borderRadius: '10px',
+                        background: isPos ? '#F0FFF4' : '#FFF5F5',
+                        border: `1px solid ${isPos ? '#BBF7D0' : '#FECACA'}`,
+                      }}>
+                        <div style={{
+                          width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
+                          background: isPos ? '#BBF7D0' : '#FECACA',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {isPos
+                            ? <ArrowUpRight size={16} color="#16A34A" />
+                            : <ArrowDownRight size={16} color="#DC2626" />
+                          }
+                        </div>
+                        <span style={{ fontSize: '14px', color: '#1A1A2E', flex: 1 }}>{exp}</span>
+                        <span style={{
+                          fontSize: '11px', fontWeight: '700', padding: '3px 10px',
+                          borderRadius: '20px', textTransform: 'uppercase' as const,
+                          background: isPos ? '#BBF7D0' : '#FECACA',
+                          color: isPos ? '#14532D' : '#7F1D1D',
+                        }}>
+                          {isPos ? '▲ Positive' : '▼ Negative'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {result.explanation.length > 8 && (
+                    <button
+                      onClick={() => setShowAll(!showAll)}
+                      style={{
+                        marginTop: '8px', padding: '10px', borderRadius: '10px',
+                        background: '#F8FAFC', border: '1.5px dashed #CBD5E1',
+                        color: '#0A1628', fontWeight: '600', cursor: 'pointer',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {showAll ? 'Show Less' : `Show All ${result.explanation.length} Factors`}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Suggestions */}
+              {!result.approved && (
+                <div style={{
+                  ...S.card,
+                  background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)',
+                  border: '2px solid #FDE68A',
+                }}>
+                  <div style={{ padding: '28px 24px', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Lightbulb size={20} color="#F4B942" />
+                    <h3 style={{ ...S.cardTitle, margin: 0 }}>How to Improve</h3>
+                  </div>
+                  <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column' as const, gap: '12px' }}>
+                    {result.suggestions.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                        <div style={{
+                          width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                          background: '#F4B942', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '2px',
+                        }}>
+                          <span style={{ color: 'white', fontSize: '11px', fontWeight: '700' }}>{i + 1}</span>
+                        </div>
+                        <p style={{ fontSize: '13px', color: '#78350F', lineHeight: '1.6', margin: 0 }}>{s}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.approved && (
+                <div style={{
+                  ...S.card,
+                  background: '#0A1628', color: 'white',
+                  padding: '32px', textAlign: 'center' as const,
+                  display: 'flex', flexDirection: 'column' as const,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <div style={{
+                    width: '64px', height: '64px', borderRadius: '50%',
+                    background: 'rgba(244,185,66,0.15)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', marginBottom: '16px',
+                  }}>
+                    <CheckCircle2 size={32} color="#F4B942" />
+                  </div>
+                  <h4 style={{ color: 'white', fontWeight: '700', fontSize: '18px', margin: '0 0 8px' }}>
+                    You're all set!
+                  </h4>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
+                    Our team will contact you within 24 hours to finalize your loan agreement.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
