@@ -1,0 +1,141 @@
+{
+  "layout": {
+    "title": "Explainable Lending XAI",
+    "subtitle": "Fair & Transparent Credit Decisions",
+    "dashboard": "Dashboard",
+    "predict": "Predict",
+    "auditLog": "Audit Log",
+    "fairness": "Fairness",
+    "export": "Export",
+    "logout": "Logout"
+  },
+  "role": {
+    "applicant": "Applicant",
+    "auditor": "Auditor",
+    "regulator": "Regulator"
+  },
+  "applicant": {
+    "form": {
+      "title": "Loan Application",
+      "description": "Fill out the form below to get a loan decision",
+      "income": "Annual Income ($)",
+      "loanAmount": "Loan Amount ($)",
+      "creditHistory": "Credit Score",
+      "employmentType": "Employment Type",
+      "existingLoans": "Existing Loans",
+      "selectEmployment": "Select employment type",
+      "employmentTypes": {
+        "salaried": "Salaried",
+        "selfEmployed": "Self-Employed",
+        "unemployed": "Unemployed",
+        "student": "Student"
+      },
+      "submit": "Get Decision",
+      "submitting": "Processing...",
+      "reset": "Reset Form"
+    },
+    "result": {
+      "approved": "Application Approved",
+      "rejected": "Application Rejected",
+      "confidence": "Confidence Score",
+      "explanationTitle": "Decision Factors",
+      "suggestions": "Suggestions",
+      "applyAgain": "Apply Again",
+      "error": "Error processing application"
+    }
+  },
+  "auditor": {
+    "stats": {
+      "total": "Total Applications",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "anomalies": "Anomalies"
+    },
+    "tabs": {
+      "log": "Audit Log",
+      "anomalies": "Anomaly Detection",
+      "fairness": "Fairness Metrics"
+    },
+    "fairness": {
+      "description": "Model fairness evaluation across protected groups"
+    },
+    "metrics": {
+      "demographicParity": "Demographic Parity",
+      "equalizedOdds": "Equalized Odds",
+      "value": "Value",
+      "threshold": "Threshold"
+    },
+    "status": {
+      "status": "Status",
+      "pass": "PASS",
+      "fail": "FAIL"
+    },
+    "table": {
+      "timestamp": "Timestamp",
+      "action": "Action",
+      "user": "User",
+      "prediction": "Prediction",
+      "requestId": "Request ID"
+    },
+    "actions": {
+      "verifyChain": "Verify Blockchain",
+      "export": "Export Report",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page"
+    },
+    "drift": {
+      "title": "Feature Drift Analysis"
+    }
+  },
+  "regulator": {
+    "fairness": {
+      "title": "Fairness Compliance Dashboard",
+      "description": "Monitor model compliance with fairness regulations"
+    },
+    "metrics": {
+      "demographicParity": "Demographic Parity",
+      "equalizedOdds": "Equalized Odds",
+      "equalOpportunity": "Equal Opportunity",
+      "fourFifths": "Four-Fifths Rule"
+    },
+    "status": {
+      "pass": "PASS",
+      "fail": "FAIL"
+    },
+    "drift": {
+      "title": "Model Drift Monitoring",
+      "description": "Track model performance drift over time",
+      "featureDrift": "Feature Drift Analysis",
+      "predictionDrift": "Prediction Drift",
+      "baseline": "Baseline",
+      "current": "Current",
+      "driftScore": "Drift Score",
+      "stable": "Stable",
+      "warning": "Warning",
+      "critical": "Critical"
+    },
+    "export": {
+      "title": "Export Reports",
+      "description": "Generate compliance reports",
+      "pdf": "Export PDF",
+      "csv": "Export CSV",
+      "success": "Export successful",
+      "error": "Export failed"
+    }
+  },
+  "login": {
+    "title": "Sign In",
+    "description": "Enter your authentication token to access the system",
+    "token": "Authentication Token",
+    "tokenPlaceholder": "Enter JWT token...",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "error": {
+      "tokenRequired": "Token is required",
+      "invalid": "Invalid token"
+    },
+    "demoNote": "Demo: Use any token value to sign in.",
+    "demoRoles": "Available demo roles:"
+  }
+}

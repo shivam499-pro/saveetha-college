@@ -1,0 +1,8 @@
+dataset_path: "data/german.data"
+model_path: "data/model.joblib"
+threshold: 0.5
+protected_attributes:
+  - "gender"
+  - "age_group"
+  - "geography"
+audit_log_path: "data/audit.log"
