@@ -1,13 +1,12 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { getToken } from '@/lib/api'
 import { login } from '@/lib/auth'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { UserRole } from '@/types'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ShieldCheck, UserCircle, Search, Scale } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const Login: React.FC = () => {
   const { t } = useTranslation()
@@ -31,41 +30,92 @@ const Login: React.FC = () => {
     }
   }
 
-  const roles: UserRole[] = ['applicant', 'auditor', 'regulator']
+  const roleDetails = [
+    {
+      role: 'applicant' as UserRole,
+      icon: UserCircle,
+      color: 'text-blue-500 bg-blue-50',
+      description: 'Apply for credit and view decisions'
+    },
+    {
+      role: 'auditor' as UserRole,
+      icon: Search,
+      color: 'text-purple-500 bg-purple-50',
+      description: 'Review decisions and verify audit trail'
+    },
+    {
+      role: 'regulator' as UserRole,
+      icon: Scale,
+      color: 'text-emerald-500 bg-emerald-50',
+      description: 'Monitor fairness and compliance'
+    }
+  ]
 
   return (
-    <div className="min-h-screen bg-[#0A1628] flex items-center justify-center p-4 relative">
-      <div className="absolute top-8 right-8">
-        <LanguageSwitcher />
+    <div className="min-h-screen bg-gradient-to-br from-[#0A1628] via-[#1a2d4a] to-[#0A1628] flex items-center justify-center p-6 relative overflow-hidden font-sans">
+      {/* Background patterns */}
+      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-gold-light blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-gold-dark blur-[120px]" />
       </div>
 
-      <Card className="w-full max-w-md border-none shadow-2xl overflow-hidden">
-        <div className="h-2 bg-[#F4B942]" />
-        <CardHeader className="text-center pt-8">
-          <CardTitle className="text-2xl font-bold text-[#0A1628]">
-            {t('auth.loginTitle')}
-          </CardTitle>
-          <CardDescription className="mt-2">
-            {t('auth.selectRole')}
-          </CardDescription>
-        </CardHeader>
+      <div className="absolute top-8 right-8 z-50">
+        <div className="bg-white/10 backdrop-blur-md p-1 rounded-full border border-white/20">
+          <LanguageSwitcher />
+        </div>
+      </div>
 
-        <CardContent className="space-y-4 pb-8 px-8">
-          {roles.map((role) => (
-            <Button
-              key={role}
-              onClick={() => handleLogin(role)}
-              disabled={!!loading}
-              className="w-full py-6 text-lg font-semibold bg-white text-[#0A1628] border-2 border-[#0A1628]/10 hover:bg-[#F4B942] hover:border-[#F4B942] hover:text-[#0A1628] transition-all capitalize"
-            >
-              {loading === role ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : null}
-              {t('auth.loginButton', { role })}
-            </Button>
-          ))}
-        </CardContent>
-      </Card>
+      <div className="w-full max-w-lg animate-fadeIn">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-3 mb-4 bg-white/5 px-4 py-2 rounded-2xl border border-white/10 backdrop-blur-sm">
+            <ShieldCheck className="text-gold w-8 h-8" />
+            <span className="text-2xl font-bold text-white tracking-tight font-display">XAI Lending</span>
+          </div>
+          <p className="text-white/60 text-lg font-medium">
+            Explainable AI Credit Decisions
+          </p>
+        </div>
+
+        <div className="glass rounded-[2rem] shadow-2xl p-8 relative overflow-hidden border-t-4 border-t-gold">
+          <div className="relative z-10 space-y-6">
+            <h2 className="text-white text-xl font-bold text-center mb-8">
+              {t('auth.selectRole')}
+            </h2>
+
+            <div className="grid gap-4">
+              {roleDetails.map(({ role, icon: Icon, color, description }) => (
+                <button
+                  key={role}
+                  onClick={() => handleLogin(role)}
+                  disabled={!!loading}
+                  className={cn(
+                    "group relative w-full bg-white rounded-2xl p-5 flex items-center gap-5 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:ring-2 hover:ring-gold border-2 border-transparent text-left",
+                    loading === role ? "opacity-90" : ""
+                  )}
+                >
+                  <div className={cn("p-3 rounded-xl transition-colors duration-300 group-hover:bg-gold/10", color)}>
+                    {loading === role ? (
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    ) : (
+                      <Icon className="w-8 h-8" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-navy text-lg capitalize tracking-tight font-display">{role}</div>
+                    <div className="text-gray-500 text-sm font-medium">{description}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 text-center">
+          <p className="text-white/40 text-sm font-medium">
+            &copy; 2026 Explainable Lending Platform. All Rights Reserved.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
