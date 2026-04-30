@@ -220,6 +220,7 @@ Translation files: `frontend/public/locales/{lang}/translation.json`
 ---
 
 ## 📁 Project Structure
+```
 saveetha-hackathon/
 ├── backend/
 │   ├── src/
@@ -244,7 +245,7 @@ saveetha-hackathon/
 │
 ├── docker-compose.yml
 └── README.md
-
+```
 ---
 
 ## 🧪 Test Credentials
