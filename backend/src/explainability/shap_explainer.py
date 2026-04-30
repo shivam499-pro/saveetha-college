@@ -246,6 +246,181 @@ def actionable_suggestions(shap_results):
     
     return unique_suggestions
 
+
+def generate_enriched_explanations(shap_results, enhanced_features, req):
+    """
+    Generate enriched plain-language explanations leveraging advanced applicant data.
+    
+    Args:
+        shap_results: SHAP results from model
+        enhanced_features: Dict of engineered features
+        req: Original prediction request
+        
+    Returns:
+        List of enriched explanation strings
+    """
+    enriched = []
+    
+    # Debt-to-income analysis
+    dti = enhanced_features.get("dti_ratio")
+    if dti is not None:
+        if dti < 0.3:
+            enriched.append(f"Your debt-to-income ratio of {dti*100:.1f}% is excellent, showing strong capacity to manage additional debt.")
+        elif dti < 0.4:
+            enriched.append(f"Your debt-to-income ratio of {dti*100:.1f}% is moderate. Consider reducing existing debts before applying.")
+        else:
+            enriched.append(f"Your debt-to-income ratio of {dti*100:.1f}% is high, which may impact your ability to take on more debt.")
+    
+    # Emergency fund analysis
+    emergency_months = enhanced_features.get("emergency_fund_months")
+    if emergency_months is not None:
+        if emergency_months >= 6:
+            enriched.append(f"You have {emergency_months} months of expenses in savings, providing excellent financial security.")
+        elif emergency_months >= 3:
+            enriched.append(f"You have {emergency_months} months of expenses covered by savings. Building to 6+ months would strengthen your position.")
+        else:
+            enriched.append(f"With only {emergency_months} months of expenses in savings, building your emergency fund should be a priority.")
+    
+    # Credit utilization analysis
+    credit_util = enhanced_features.get("credit_utilization")
+    if credit_util is not None:
+        if credit_util < 30:
+            enriched.append(f"Your credit utilization of {credit_util}% is in the healthy range, demonstrating responsible credit management.")
+        elif credit_util < 50:
+            enriched.append(f"Your credit utilization of {credit_util}% is moderate. Reducing it below 30% could improve your credit profile.")
+        else:
+            enriched.append(f"Your credit utilization of {credit_util}% is high. Paying down balances could significantly improve your approval chances.")
+    
+    # Missed payments impact
+    missed = enhanced_features.get("missed_payments_count", 0)
+    if missed > 0:
+        enriched.append(f"Your {missed} missed payment{'s' if missed > 1 else ''} negatively impacts your creditworthiness. Setting up automatic payments can help avoid future issues.")
+    elif missed == 0:
+        enriched.append("Your clean payment history with no missed payments is a strong positive factor.")
+    
+    # Education level impact
+    edu = enhanced_features.get("education_level")
+    if edu:
+        edu_map = {
+            "phd": "PhD", "masters": "Master's", "bachelors": "Bachelor's",
+            "high_school": "High School"
+        }
+        edu_label = edu_map.get(edu, edu)
+        enriched.append(f"Your education level ({edu_label}) demonstrates commitment to personal development and may correlate with income stability.")
+    
+    # Location-based insights
+    city_tier = enhanced_features.get("city_tier")
+    if city_tier:
+        tier_map = {
+            "tier1": "Tier 1 metro", "tier2": "Tier 2 city", "tier3": "Tier 3 city"
+        }
+        enriched.append(f"Location: {tier_map.get(city_tier, city_tier)} - this factors into regional economic conditions and cost of living.")
+    
+    # Collateral
+    if enhanced_features.get("collateral_available"):
+        enriched.append("Collateral availability significantly reduces lender risk and improves approval odds, potentially with better terms.")
+    
+    # Loan purpose
+    purpose = enhanced_features.get("loan_purpose")
+    if purpose:
+        purpose_map = {
+            "debt_consolidation": "Debt consolidation can simplify payments and reduce interest costs",
+            "home": "Home improvement loans often have favorable terms",
+            "business": "Business loans may require additional documentation",
+            "education": "Education loans are viewed as investments in future earning potential"
+        }
+        if purpose in purpose_map:
+            enriched.append(f"Loan purpose ({purpose.replace('_', ' ').title()}): {purpose_map[purpose]}.")
+    
+    # Income-to-loan ratio
+    loan_to_income = req.loan_amount / max(req.income, 1)
+    enriched.append(f"Your loan amount represents {loan_to_income*100:.1f}% of your annual income, which is {'reasonable' if loan_to_income < 0.5 else 'elevated'} relative to your earnings.")
+    
+    # Savings as percentage of loan
+    savings = enhanced_features.get("savings_balance", 0)
+    if savings > 0 and req.loan_amount > 0:
+        savings_pct = (savings / req.loan_amount) * 100
+        enriched.append(f"Your savings balance covers {savings_pct:.1f}% of the requested loan amount, providing a {'strong' if savings_pct >= 50 else 'moderate'} buffer.")
+    
+    return enriched
+
+
+def generate_enhanced_suggestions(enhanced_features, req):
+    """
+    Generate enhanced suggestions based on advanced applicant profiling.
+    
+    Args:
+        enhanced_features: Dict of engineered features
+        req: Original prediction request
+        
+    Returns:
+        List of enhanced suggestion strings
+    """
+    suggestions = []
+    
+    # DTI-based suggestions
+    dti = enhanced_features.get("dti_ratio")
+    if dti and dti > 0.4:
+        suggestions.append("💡 Reduce your debt-to-income ratio by paying down existing debts before reapplying.")
+    
+    # Emergency fund suggestions
+    emergency_months = enhanced_features.get("emergency_fund_months")
+    if emergency_months and emergency_months < 3:
+        target = max(0, (3 * (req.monthly_expenses or 2000)) - enhanced_features.get("savings_balance", 0))
+        suggestions.append(f"💡 Build emergency savings to cover 3-6 months of expenses (target: ${target:,.0f} more).")
+    
+    # Credit utilization suggestions
+    credit_util = enhanced_features.get("credit_utilization")
+    if credit_util and credit_util > 30:
+        reduction_needed = credit_util - 30
+        suggestions.append(f"💡 Reduce credit utilization to below 30% (pay down ~{reduction_needed:.0f}% of balances).")
+    
+    # Missed payments suggestions
+    missed = enhanced_features.get("missed_payments_count", 0)
+    if missed > 0:
+        suggestions.append("💡 Set up automatic payments or payment reminders to ensure on-time payments going forward.")
+    
+    # Education-based career suggestions
+    edu = enhanced_features.get("education_level")
+    if edu in ["high_school", None]:
+        suggestions.append("💡 Consider professional development or certification programs to enhance earning potential.")
+    
+    # Location-based suggestions
+    city_tier = enhanced_features.get("city_tier")
+    if city_tier == "tier3":
+        suggestions.append("💡 Explore remote work opportunities or consider relocation to areas with higher average incomes.")
+    
+    # Collateral suggestions
+    if not enhanced_features.get("collateral_available") and req.loan_amount > 50000:
+        suggestions.append("💡 Consider secured loan options or providing collateral for better rates on larger loans.")
+    
+    # Loan purpose optimization
+    purpose = enhanced_features.get("loan_purpose")
+    if purpose == "debt_consolidation" and enhanced_features.get("dti_ratio", 0) > 0.4:
+        suggestions.append("💡 Debt consolidation could simplify payments, but focus on reducing total debt burden first.")
+    
+    # Savings rate suggestions
+    savings = enhanced_features.get("savings_balance", 0)
+    monthly_exp = enhanced_features.get("monthly_expenses", 2000)
+    if savings < monthly_exp * 3:
+        save_target = (monthly_exp * 3 - savings) / 12
+        suggestions.append(f"💡 Aim to save ${save_target:,.0f}/month to build a 3-month emergency fund within a year.")
+    
+    # Income optimization
+    loan_to_income = req.loan_amount / max(req.income, 1)
+    if loan_to_income > 0.5:
+        suggestions.append("💡 Consider a smaller loan amount or longer term to reduce monthly payment burden.")
+    
+    # Remove duplicates
+    seen = set()
+    unique = []
+    for s in suggestions:
+        if s not in seen:
+            seen.add(s)
+            unique.append(s)
+    
+    return unique
+
 def main():
     """Test function to verify the explainer works."""
     # Check if model exists

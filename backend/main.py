@@ -9,6 +9,7 @@ import io
 import csv
 import os
 import asyncio
+from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -98,6 +99,7 @@ auditor_or_regulator = RoleChecker(["auditor", "regulator"])
 # ---------------------------------------------------------------------------
 
 class PredictRequest(BaseModel):
+    # Basic fields (always required for backward compatibility)
     income: float
     loan_amount: float
     credit_history: str  # "excellent" | "good" | "fair" | "poor"
@@ -105,6 +107,24 @@ class PredictRequest(BaseModel):
     existing_loans: int
     duration: int
     age: int
+    
+    # Advanced underwriting fields (optional - for enhanced profiling)
+    monthly_expenses: Optional[float] = None
+    existing_emi: Optional[float] = None
+    savings_balance: Optional[float] = None
+    credit_utilization: Optional[float] = None
+    missed_payments_count: Optional[int] = None
+    education_level: Optional[str] = None
+    marital_status: Optional[str] = None
+    dependents: Optional[int] = None
+    residence_type: Optional[str] = None
+    city_tier: Optional[str] = None
+    loan_purpose: Optional[str] = None
+    collateral_available: Optional[bool] = None
+    requested_interest_preference: Optional[str] = None
+    
+    # Mode indicator
+    application_mode: Optional[str] = Field(default="basic", description="basic or advanced")
 
 class PredictResponse(BaseModel):
     approved: bool
@@ -164,7 +184,9 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
         - Audit log ID for traceability
     """
     try:
+        # === FEATURE ENGINEERING LAYER ===
         # Map PredictRequest fields to the 69-feature format trainer.py expects
+        # Base features (always present)
         input_dict = {
             "checking_status": "A11",
             "duration": req.duration,
@@ -197,6 +219,62 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
             "foreign_worker": "A202",
         }
 
+        # Enhanced features from advanced underwriting (if provided)
+        # These are stored as metadata for richer explanations
+        enhanced_features = {}
+        
+        # Financial features
+        if req.monthly_expenses is not None:
+            enhanced_features["monthly_expenses"] = req.monthly_expenses
+            # Derive debt-to-income insight
+            annual_debt = (req.existing_emi or 0) * 12 + (req.duration * (req.loan_amount / max(req.duration, 1)))
+            enhanced_features["dti_ratio"] = round(annual_debt / max(req.income, 1), 4)
+        
+        if req.existing_emi is not None:
+            enhanced_features["existing_emi"] = req.existing_emi
+        
+        if req.savings_balance is not None:
+            enhanced_features["savings_balance"] = req.savings_balance
+            # Months of expenses covered
+            if req.monthly_expenses and req.monthly_expenses > 0:
+                enhanced_features["emergency_fund_months"] = round(req.savings_balance / req.monthly_expenses, 1)
+        
+        if req.credit_utilization is not None:
+            enhanced_features["credit_utilization"] = req.credit_utilization
+        
+        if req.missed_payments_count is not None:
+            enhanced_features["missed_payments_count"] = req.missed_payments_count
+
+        # Personal features
+        if req.education_level:
+            enhanced_features["education_level"] = req.education_level
+        
+        if req.marital_status:
+            enhanced_features["marital_status"] = req.marital_status
+        
+        if req.dependents is not None:
+            enhanced_features["dependents"] = req.dependents
+        
+        if req.residence_type:
+            enhanced_features["residence_type"] = req.residence_type
+        
+        if req.city_tier:
+            enhanced_features["city_tier"] = req.city_tier
+
+        # Loan context features
+        if req.loan_purpose:
+            enhanced_features["loan_purpose"] = req.loan_purpose
+        
+        if req.collateral_available is not None:
+            enhanced_features["collateral_available"] = req.collateral_available
+        
+        if req.requested_interest_preference:
+            enhanced_features["interest_preference"] = req.requested_interest_preference
+
+        # Application mode
+        app_mode = req.application_mode or "basic"
+        enhanced_features["application_mode"] = app_mode
+
         # Single model load + single SHAP computation via trainer.predict()
         pred_result = trainer.predict(input_dict)
 
@@ -207,12 +285,29 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
             input_dict=input_dict,
         )
 
-        plain_lang  = shap_explainer.generate_plain_language(shap_results)
+        # Generate enriched explanations if advanced mode
+        plain_lang = shap_explainer.generate_plain_language(shap_results)
+        
+        # Add enhanced explanations for advanced mode
+        enriched_explanation = []
+        if app_mode == "advanced" and enhanced_features:
+            enriched_explanation = shap_explainer.generate_enriched_explanations(
+                shap_results, enhanced_features, req
+            )
+        
         suggestions = shap_explainer.actionable_suggestions(shap_results)
+        
+        # Add enhanced suggestions for advanced mode
+        if app_mode == "advanced" and enhanced_features:
+            enhanced_suggestions = shap_explainer.generate_enhanced_suggestions(
+                enhanced_features, req
+            )
+            suggestions.extend(enhanced_suggestions)
 
         # Append tamper-evident audit entry
         decision_data = {
             "input_data": input_dict,
+            "enhanced_features": enhanced_features,
             "prediction": pred_result["approved"],
             "confidence": pred_result["confidence"],
             "shap_values": shap_results,
@@ -223,8 +318,10 @@ async def predict_loan(req: PredictRequest, role: str = Depends(applicant_or_aud
             "approved":    pred_result["approved"],
             "confidence":  pred_result["confidence"],
             "explanation": plain_lang,
+            "enriched_explanation": enriched_explanation if enriched_explanation else None,
             "suggestions": suggestions,
             "audit_id":    log_entry["id"],
+            "application_mode": app_mode,
         }
 
     except FileNotFoundError as exc:
@@ -277,13 +374,24 @@ def get_fairness_metrics(role: str = Depends(regulator_only)):
 # ---------------------------------------------------------------------------
 # GET /api/v1/fairness/drift
 # ---------------------------------------------------------------------------
-
 @app.get("/api/v1/fairness/drift", tags=["Fairness"])
 def get_data_drift(role: str = Depends(regulator_only)):
-    report = fairness_evaluator.get_drift_report()
-    if "error" in report:
-        raise HTTPException(status_code=400, detail=report["error"])
-    return report
+    """
+    Return KS-test drift report for all numerical features.
+    Regulator role required.
+    """
+    full_report = fairness_evaluator.run_full_evaluation()
+    raw_drift   = full_report["drift_report"]
+
+    # Transform list → dict keyed by feature name (matches frontend shape)
+    # Frontend expects: { feature_name: { drift_score, drift_detected } }
+    transformed = {}
+    for feat in raw_drift["features"]:
+        transformed[feat["feature"]] = {
+            "drift_score":     feat["ks_statistic"],
+            "drift_detected":  feat["drifted"],
+        }
+    return transformed
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/dashboard/stats
@@ -313,8 +421,10 @@ async def export_report(
     format: str = Query(..., pattern="^(pdf|csv)$", description="pdf or csv"),
     role: str = Depends(regulator_only),
 ):
-    metrics = fairness_evaluator.get_fairness_report()
-    drift   = fairness_evaluator.get_drift_report()
+    # ── Run once, get both reports ──────────────────────────────────────────
+    full_eval = fairness_evaluator.run_full_evaluation()
+    metrics   = full_eval["fairness_report"]
+    raw_drift = full_eval["drift_report"]   # { drift_detected, features: [...] }
 
     all_logs      = await audit_logger.get_log(1, 10000)
     total         = len(all_logs)
@@ -322,7 +432,7 @@ async def export_report(
     rejected      = total - approved
     approval_rate = round((approved / total * 100), 2) if total > 0 else 0.0
     anomaly_count = len(await audit_logger.flag_anomalies())
-    
+
     # ---- CSV ---------------------------------------------------------------
     if format == "csv":
         output = io.StringIO()
@@ -337,24 +447,31 @@ async def export_report(
         writer.writerow(["Anomalies Detected", anomaly_count])
         writer.writerow([])
 
-        if "error" not in drift:
-            writer.writerow(["=== DATA DRIFT ==="])
-            writer.writerow(["Dataset Drift Detected", drift.get("dataset_drift")])
-            writer.writerow(["Drifted Columns",        drift.get("number_of_drifted_columns")])
-            writer.writerow(["Drift Share",             drift.get("share_of_drifted_columns")])
-            writer.writerow([])
+        # Drift — uses actual keys from your KS-test report
+        writer.writerow(["=== DATA DRIFT ==="])
+        writer.writerow(["Overall Drift Detected", raw_drift.get("drift_detected")])
+        writer.writerow([])
+        writer.writerow(["Feature", "KS Statistic", "P-Value", "Status"])
+        for feat in raw_drift.get("features", []):
+            writer.writerow([
+                feat["feature"],
+                round(feat["ks_statistic"], 4),
+                round(feat["p_value"], 4),
+                "DRIFTED" if feat["drifted"] else "STABLE",
+            ])
+        writer.writerow([])
 
-        if "error" not in metrics:
-            writer.writerow(["=== FAIRNESS METRICS ==="])
-            for attr, group_metrics in metrics.items():
-                writer.writerow([f"--- {attr} ---"])
-                for k, v in group_metrics.items():
-                    if k == "selection_rates":
-                        for grp, rate in v.items():
-                            writer.writerow([f"  selection_rate ({grp})", round(rate, 4)])
-                    else:
-                        writer.writerow([f"  {k}", v])
-                writer.writerow([])
+        # Fairness
+        writer.writerow(["=== FAIRNESS METRICS ==="])
+        for attr, group_metrics in metrics.items():
+            writer.writerow([f"--- {attr} ---"])
+            for k, v in group_metrics.items():
+                if k == "selection_rates":
+                    for grp, rate in v.items():
+                        writer.writerow([f"  selection_rate ({grp})", round(rate, 4)])
+                else:
+                    writer.writerow([f"  {k}", v])
+            writer.writerow([])
 
         csv_bytes = output.getvalue().encode("utf-8")
         response  = Response(content=csv_bytes, media_type="text/csv")
@@ -414,24 +531,25 @@ async def export_report(
         ]:
             y = row(label, value, y)
             y = check_page(y)
-
         y -= 16
 
-        # Drift
-        if "error" not in drift:
+        # Drift — uses actual KS-test structure
+        y = check_page(y)
+        y = header("Data Drift", y)
+        y = row("Overall Drift Detected", raw_drift.get("drift_detected"), y)
+        y -= 8
+        for feat in raw_drift.get("features", []):
             y = check_page(y)
-            y = header("Data Drift", y)
-            for label, value in [
-                ("Dataset Drift Detected",  drift.get("dataset_drift")),
-                ("Drifted Columns",         drift.get("number_of_drifted_columns")),
-                ("Share of Drifted Columns",drift.get("share_of_drifted_columns")),
-            ]:
-                y = row(label, value, y)
-                y = check_page(y)
-            y -= 16
+            status = "DRIFTED" if feat["drifted"] else "STABLE"
+            y = row(
+                feat["feature"],
+                f"KS={feat['ks_statistic']:.3f}  p={feat['p_value']:.3f}  [{status}]",
+                y, indent=10
+            )
+        y -= 16
 
         # Fairness
-        if "error" not in metrics:
+        if metrics:
             y = check_page(y)
             y = header("Fairness Metrics", y)
             for attr, gm in metrics.items():
