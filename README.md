@@ -277,11 +277,9 @@ This system is designed to satisfy requirements from:
 ---
 
 ## 👨‍💻 Developer
-
-**Shivam Jaiswal**
-- CSE Student | Full-Stack Developer
+TEAM = SENTINEL SQUAD 
+-CSE Students   
 - Rajalakshmi Engineering College
-- GitHub: [@shivam499-pro](https://github.com/shivam499-pro)
 
 ---
 
